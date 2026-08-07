@@ -179,7 +179,14 @@ test("stopAll clears everything", async () => {
   assert.equal(processes.running.size, 0);
 });
 
-test("refuses to start without a vendored binary", async () => {
+test("a missing binary names the exact path to put one at", async () => {
+  // The fix is a file the user has to place; an error that only says
+  // "unsupported" leaves them nowhere to go.
   const processes = new ArgonProcesses({ binary: null, spawn: () => {}, probe: async () => true });
-  await assert.rejects(processes.start("/projects/game"), /no vendored argon/);
+
+  await assert.rejects(processes.start("/projects/game"), (error) => {
+    assert.match(error.message, /no argon binary for/);
+    assert.match(error.message, /vendor\/argon\//, "the message must include the path to drop a release at");
+    return true;
+  });
 });
