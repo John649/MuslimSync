@@ -1,12 +1,45 @@
+/* MuslimSync — Discord-flavoured shell.
+ *
+ * Discord's surface ladder and metrics, because the structure maps cleanly:
+ * the server rail is a project switcher, channels are views, and the embed is
+ * exactly the right frame for the verse card. Blurple is swapped for green.
+ */
+
 :root {
-  --bg: #0f1115;
-  --panel: #161920;
-  --panel-2: #1c2029;
-  --line: #262b36;
-  --text: #e6e9ef;
-  --dim: #9aa3b2;
-  --brand: #4ade80;
-  --brand-dim: #22c55e;
+  /* Discord's surface ladder, darkest to lightest. */
+  --rail: #1e1f22;
+  --sidebar: #2b2d31;
+  --panel: #232428;
+  --content: #313338;
+  --raised: #383a40;
+  --input: #1e1f22;
+  --divider: #3f4147;
+
+  --fg: #f2f3f5;
+  --text: #dbdee1;
+  --muted: #b5bac1;
+  --channel: #949ba4;
+  --faint: #80848e;
+
+  --accent: #3ba55d;
+  --accent-hover: #2d7d46;
+  --online: #23a559;
+  --danger: #da373c;
+  --warn: #f0b232;
+
+  --radius-xs: 3px;
+  --radius-sm: 4px;
+  --radius: 8px;
+
+  --sans: "gg sans", -apple-system, BlinkMacSystemFont, "Noto Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  /* Faces that ship with macOS and Windows and render Uthmani diacritics
+     correctly. Amiri is not bundled yet. */
+  --arabic: "SF Arabic", "Geeza Pro", "Al Bayan", "Traditional Arabic", "Segoe UI", serif;
+
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --elevation-low: 0 1px 0 rgba(4, 4, 5, 0.2), 0 1.5px 0 rgba(6, 6, 7, 0.05), 0 2px 0 rgba(4, 4, 5, 0.05);
+  --elevation-high: 0 8px 16px rgba(0, 0, 0, 0.24);
 }
 
 * {
@@ -15,183 +48,719 @@
 }
 
 body {
-  display: grid;
-  grid-template-columns: 320px 1fr;
   height: 100vh;
   overflow: hidden;
-  background: var(--bg);
+  background: var(--content);
   color: var(--text);
-  font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  font-family: var(--sans);
+  font-size: 14px;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* ------------------------------------------------------------- sidebar */
+button,
+input,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+code {
+  padding: 1px 4px;
+  border-radius: var(--radius-xs);
+  background: var(--rail);
+  font-family: var(--mono);
+  font-size: 0.85em;
+}
+
+strong {
+  color: var(--fg);
+  font-weight: 600;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 8px;
+  background: var(--rail);
+  background-clip: content-box;
+}
+
+.app {
+  display: grid;
+  grid-template-columns: 72px 240px 1fr;
+  height: 100vh;
+  min-height: 0;
+}
+
+/* --------------------------------------------------------------- rail */
+
+.rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  /* Clears the macOS traffic lights. */
+  padding: 34px 0 12px;
+  background: var(--rail);
+  overflow-y: auto;
+  -webkit-app-region: drag;
+}
+
+.rail::-webkit-scrollbar {
+  display: none;
+}
+
+.rail-item {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  -webkit-app-region: no-drag;
+}
+
+/* The project container is empty until projects exist; without this it holds
+   open a gap and renders a stray hover pill over nothing. */
+.rail-item:empty {
+  display: none;
+}
+
+/* The white pill on the left edge: 8px on hover, 40px when active. */
+.rail-pill {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 4px;
+  height: 0;
+  border-radius: 0 4px 4px 0;
+  background: var(--fg);
+  transform: translateY(-50%);
+  transition: height 0.2s var(--ease);
+}
+
+.rail-item:hover .rail-pill {
+  height: 20px;
+}
+
+.rail-item.is-active .rail-pill {
+  height: 40px;
+}
+
+.rail-button {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border: 0;
+  /* The squircle morph: fully round at rest, rounded-square when active. */
+  border-radius: 24px;
+  background: var(--sidebar);
+  color: var(--text);
+  cursor: pointer;
+  transition: border-radius 0.15s var(--ease), background-color 0.15s var(--ease), color 0.15s var(--ease);
+}
+
+.rail-button:hover,
+.rail-item.is-active .rail-button {
+  border-radius: 16px;
+}
+
+.rail-button.is-home {
+  background: linear-gradient(150deg, var(--accent), var(--accent-hover));
+  color: #fff;
+}
+
+.rail-button.is-add {
+  color: var(--accent);
+}
+
+.rail-button.is-add:hover {
+  background: var(--accent);
+  color: #fff;
+}
+
+.rail-glyph {
+  font-family: var(--arabic);
+  font-size: 22px;
+  line-height: 1;
+}
+
+.rail-divider {
+  width: 32px;
+  height: 2px;
+  /* Breathing room on both sides, or it reads as an underline on the icon
+     above rather than a separator between two groups. */
+  margin: 2px 0;
+  border: 0;
+  border-radius: 1px;
+  background: var(--divider);
+}
+
+/* ------------------------------------------------------------ sidebar */
 
 .sidebar {
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  padding: 16px;
-  border-right: 1px solid var(--line);
-  background: var(--panel);
+  min-height: 0;
+  background: var(--sidebar);
+}
+
+.sidebar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 48px;
+  padding: 0 16px;
+  box-shadow: var(--elevation-low);
+  color: var(--fg);
+  cursor: pointer;
+  -webkit-app-region: drag;
+}
+
+.sidebar-head:hover {
+  background: rgba(78, 80, 88, 0.16);
+}
+
+.sidebar-title {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.sidebar-chevron {
+  color: var(--fg);
+  opacity: 0.7;
+}
+
+.channels {
+  flex: 1;
+  min-height: 0;
+  padding: 8px;
   overflow-y: auto;
 }
 
-.brand {
+.category {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding-top: 22px; /* clears the macOS traffic lights */
-}
-
-.mark {
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  background: linear-gradient(140deg, var(--brand), var(--brand-dim));
-  color: #06210f;
-  font-size: 17px;
-  font-weight: 700;
-}
-
-.name {
+  gap: 2px;
+  padding: 16px 0 4px 2px;
+  color: var(--channel);
+  font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0.01em;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  cursor: pointer;
 }
 
-/* ---------------------------------------------------------- verse card */
+.category:hover {
+  color: var(--fg);
+}
 
-.verse {
+.channel {
   display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 16px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: linear-gradient(165deg, var(--panel-2), var(--panel));
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  height: 32px;
+  margin-bottom: 2px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--channel);
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 0.1s var(--ease), color 0.1s var(--ease);
+}
+
+.channel:hover {
+  background: rgba(78, 80, 88, 0.3);
+  color: var(--text);
+}
+
+.channel.is-active {
+  background: #404249;
+  color: var(--fg);
+}
+
+.channel-icon {
+  width: 20px;
+  color: var(--faint);
+  font-size: 20px;
+  font-weight: 400;
+  text-align: center;
+}
+
+.channel.is-active .channel-icon {
+  color: var(--muted);
+}
+
+.channel-name {
+  flex: 1;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.channel-badge {
+  min-width: 16px;
+  padding: 0 5px;
+  border-radius: 8px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+}
+
+/* ------------------------------------------------- verse card as embed */
+
+.embed {
+  position: relative;
+  margin: 0 8px 8px;
+  padding: 11px 12px 10px 13px;
+  /* Discord's embed shape: accent stripe down the left, subtle fill. */
+  border-left: 4px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+}
+
+.embed-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 7px;
+}
+
+.embed-author {
+  color: var(--fg);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.embed-tag {
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: rgba(59, 165, 93, 0.16);
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.embed-tag:empty {
+  display: none;
 }
 
 .verse-arabic {
-  /* Amiri is not bundled yet; these are the faces that actually ship with
-     macOS and Windows and render Uthmani diacritics correctly. */
-  font-family: "SF Arabic", "Geeza Pro", "Al Bayan", "Traditional Arabic", "Segoe UI", serif;
-  font-size: 21px;
+  margin-bottom: 6px;
+  font-family: var(--arabic);
+  font-size: 17px;
+  /* Uthmani diacritics stack high; anything tighter clips them. */
   line-height: 2.1;
   text-align: right;
+  color: var(--fg);
 }
 
-.verse-arabic:empty,
-.verse-arabic.is-hidden {
+.verse-arabic.is-hidden,
+.verse-arabic:empty {
   display: none;
 }
 
 .verse-translation {
   color: var(--text);
-  font-size: 13.5px;
-  line-height: 1.65;
+  font-size: 13px;
+  line-height: 1.5;
 }
 
-.verse-foot {
+.embed-foot {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-top: 4px;
-  border-top: 1px solid var(--line);
+  margin-top: 9px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
 }
 
-.verse-ref {
-  color: var(--dim);
-  font-size: 12px;
+.embed-ref {
+  color: var(--faint);
+  font-size: 11px;
+  font-weight: 500;
 }
 
-.verse-actions {
+.embed-actions {
   display: flex;
-  gap: 4px;
+  gap: 2px;
 }
 
-.verse-actions button {
-  padding: 2px 7px;
+.icon-button {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--dim);
-  font-size: 14px;
+  color: var(--channel);
   cursor: pointer;
+  transition: background-color 0.1s var(--ease), color 0.1s var(--ease);
 }
 
-.verse-actions button:hover {
-  background: var(--line);
-  color: var(--text);
+.icon-button:hover {
+  background: var(--raised);
+  color: var(--fg);
 }
 
-/* -------------------------------------------------------------- nav */
+.icon-button.is-done {
+  color: var(--accent);
+}
 
-.nav {
+/* -------------------------------------------------------- user panel */
+
+.panel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 52px;
+  padding: 0 8px;
+  background: var(--panel);
+}
+
+.avatar {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: linear-gradient(150deg, var(--accent), var(--accent-hover));
+  color: #fff;
+}
+
+.avatar-glyph {
+  font-family: var(--arabic);
+  font-size: 15px;
+  line-height: 1;
+}
+
+/* The status dot punches a hole in the avatar, the way Discord's does. */
+.avatar-status {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  width: 12px;
+  height: 12px;
+  border: 3px solid var(--panel);
+  border-radius: 50%;
+  background: var(--faint);
+  transition: background-color 0.2s var(--ease);
+}
+
+.avatar-status.is-live {
+  background: var(--online);
+}
+
+.panel-copy {
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  margin-top: auto;
 }
 
-.nav-item {
-  padding: 8px 10px;
+.panel-name {
+  color: var(--fg);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.panel-sub {
+  overflow: hidden;
+  color: var(--channel);
+  font-size: 12px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.panel-button {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--dim);
-  font: inherit;
-  text-align: left;
+  color: var(--muted);
   cursor: pointer;
+  transition: background-color 0.1s var(--ease), color 0.1s var(--ease);
 }
 
-.nav-item:hover {
-  background: var(--panel-2);
-  color: var(--text);
+.panel-button:hover {
+  background: var(--raised);
+  color: var(--fg);
 }
 
-.nav-item.is-active {
-  background: var(--panel-2);
-  color: var(--text);
-  box-shadow: inset 2px 0 0 var(--brand);
+/* ----------------------------------------------------------- main */
+
+.main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--content);
 }
 
-/* ---------------------------------------------------------- content */
-
-.content {
-  padding: 46px 32px 32px;
-  overflow-y: auto;
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 48px;
+  padding: 0 16px;
+  box-shadow: var(--elevation-low);
+  -webkit-app-region: drag;
 }
 
-.view.is-hidden {
-  display: none;
+.topbar-icon {
+  color: var(--faint);
+  font-size: 22px;
+  font-weight: 400;
 }
 
-h1 {
-  margin-bottom: 16px;
-  font-size: 20px;
+.topbar-name {
+  color: var(--fg);
+  font-size: 15px;
   font-weight: 600;
 }
 
-.empty {
-  color: var(--dim);
+.topbar-divider {
+  width: 1px;
+  height: 24px;
+  margin: 0 4px;
+  background: var(--divider);
 }
 
-.setting {
+.topbar-note {
+  overflow: hidden;
+  color: var(--channel);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.content {
+  flex: 1;
+  min-height: 0;
+  padding: 24px;
+  overflow-y: auto;
+}
+
+.page.is-hidden {
+  display: none;
+}
+
+/* ---------------------------------------------------------- hero */
+
+.hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  max-width: 560px;
+  margin: 6vh auto 0;
+  text-align: center;
+}
+
+.hero-icon {
+  display: grid;
+  place-items: center;
+  width: 68px;
+  height: 68px;
+  margin-bottom: 6px;
+  border-radius: 50%;
+  background: var(--raised);
+  color: var(--muted);
+}
+
+.hero-title {
+  color: var(--fg);
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.hero-body {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.hero-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.stage {
+  margin-top: 4px;
+  padding: 2px 8px;
+  border-radius: 8px;
+  background: var(--raised);
+  color: var(--faint);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.button {
+  padding: 8px 16px;
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: var(--raised);
+  color: var(--fg);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.15s var(--ease), opacity 0.15s var(--ease);
+}
+
+.button:hover:not(:disabled) {
+  background: #4a4d54;
+}
+
+.button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.button.is-primary {
+  background: var(--accent);
+  color: #fff;
+}
+
+.button.is-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+/* ------------------------------------------------------- settings */
+
+.settings {
+  max-width: 660px;
+}
+
+.group-title {
+  margin-bottom: 10px;
+  color: var(--fg);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.group {
+  border-radius: var(--radius);
+  background: var(--panel);
+  overflow: hidden;
+}
+
+.row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  max-width: 460px;
-  padding: 12px 0;
-  border-bottom: 1px solid var(--line);
+  gap: 20px;
+  padding: 14px 16px;
 }
 
-.setting input[type="time"],
-.setting select {
-  padding: 5px 8px;
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  background: var(--panel-2);
+.row + .row {
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.row-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.row-label {
+  color: var(--fg);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.row-help {
+  color: var(--channel);
+  font-size: 12.5px;
+}
+
+.row-help:empty {
+  display: none;
+}
+
+.field {
+  padding: 7px 10px;
+  border: 1px solid var(--rail);
+  border-radius: var(--radius-xs);
+  background: var(--input);
   color: var(--text);
-  font: inherit;
+  font-size: 14px;
+}
+
+.field:focus-visible {
+  border-color: var(--accent);
+  outline: none;
+}
+
+/* A real switch: a raw checkbox is the clearest tell of an unfinished UI. */
+.switch {
+  position: relative;
+  flex: 0 0 auto;
+  cursor: pointer;
+}
+
+.switch input {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.switch-track {
+  display: block;
+  width: 40px;
+  height: 24px;
+  border-radius: 12px;
+  background: #80848e;
+  transition: background-color 0.16s var(--ease);
+}
+
+.switch-track::after {
+  content: "";
+  display: block;
+  width: 18px;
+  height: 18px;
+  margin: 3px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.16s var(--ease);
+}
+
+.switch input:checked + .switch-track {
+  background: var(--accent);
+}
+
+.switch input:checked + .switch-track::after {
+  transform: translateX(16px);
+}
+
+.switch input:focus-visible + .switch-track {
+  box-shadow: 0 0 0 3px rgba(59, 165, 93, 0.35);
 }

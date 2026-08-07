@@ -2,70 +2,280 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:;" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self';" />
     <title>MuslimSync</title>
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
-    <aside class="sidebar">
-      <header class="brand">
-        <span class="mark">م</span>
-        <span class="name">MuslimSync</span>
-      </header>
+    <div class="app">
+      <!-- Project rail — Discord's server list, but each icon is a project. -->
+      <nav class="rail" aria-label="Projects">
+        <div class="rail-item is-active">
+          <span class="rail-pill" aria-hidden="true"></span>
+          <button class="rail-button is-home" type="button" title="Home" aria-label="Home">
+            <span class="rail-glyph">&#1605;</span>
+          </button>
+        </div>
 
-      <section class="verse" id="verse" aria-live="polite">
-        <p class="verse-arabic" id="verse-arabic" dir="rtl" lang="ar"></p>
-        <p class="verse-translation" id="verse-translation"></p>
-        <footer class="verse-foot">
-          <span class="verse-ref" id="verse-ref"></span>
-          <span class="verse-actions">
-            <button id="verse-draw" title="Another verse" aria-label="Another verse">&#8635;</button>
-            <button id="verse-copy" title="Copy" aria-label="Copy verse">&#8690;</button>
-          </span>
-        </footer>
-      </section>
+        <hr class="rail-divider" />
 
-      <nav class="nav">
-        <button class="nav-item is-active" data-view="projects">Projects</button>
-        <button class="nav-item" data-view="commands">Commands</button>
-        <button class="nav-item" data-view="settings">Settings</button>
+        <div class="rail-item" id="rail-projects"></div>
+
+        <div class="rail-item">
+          <span class="rail-pill" aria-hidden="true"></span>
+          <button class="rail-button is-add" type="button" title="Add a project" aria-label="Add a project">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+          </button>
+        </div>
       </nav>
-    </aside>
 
-    <main class="content">
-      <section class="view" id="view-projects">
-        <h1>Projects</h1>
-        <p class="empty">No projects yet. Milestone 3 wires this up to the argon serve lifecycle.</p>
-      </section>
+      <!-- Channel sidebar -->
+      <aside class="sidebar">
+        <header class="sidebar-head">
+          <span class="sidebar-title">MuslimSync</span>
+          <svg class="sidebar-chevron" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="m6 9 6 6 6-6" />
+          </svg>
+        </header>
 
-      <section class="view is-hidden" id="view-commands">
-        <h1>Commands</h1>
-        <p class="empty">Custom commands appear here once the loader lands (milestone 6).</p>
-      </section>
+        <div class="channels">
+          <div class="category">
+            <svg class="category-chevron" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+            <span>Sync</span>
+          </div>
+          <button class="channel is-active" data-view="projects" type="button">
+            <span class="channel-icon">#</span>
+            <span class="channel-name">projects</span>
+          </button>
+          <button class="channel" data-view="activity" type="button">
+            <span class="channel-icon">#</span>
+            <span class="channel-name">activity</span>
+          </button>
+          <button class="channel" data-view="conflicts" type="button">
+            <span class="channel-icon">#</span>
+            <span class="channel-name">conflicts</span>
+            <span class="channel-badge" hidden>0</span>
+          </button>
 
-      <section class="view is-hidden" id="view-settings">
-        <h1>Settings</h1>
-        <div class="setting">
-          <label for="reminder-enabled">Daily verse reminder</label>
-          <input type="checkbox" id="reminder-enabled" />
+          <div class="category">
+            <svg class="category-chevron" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+            <span>Tools</span>
+          </div>
+          <button class="channel" data-view="commands" type="button">
+            <span class="channel-icon">#</span>
+            <span class="channel-name">commands</span>
+          </button>
+          <button class="channel" data-view="capture" type="button">
+            <span class="channel-icon">#</span>
+            <span class="channel-name">capture</span>
+          </button>
+          <button class="channel" data-view="playtest" type="button">
+            <span class="channel-icon">#</span>
+            <span class="channel-name">playtest</span>
+          </button>
         </div>
-        <div class="setting">
-          <label for="reminder-time">Reminder time</label>
-          <input type="time" id="reminder-time" />
-        </div>
-        <div class="setting">
-          <label for="translation">Translation</label>
-          <select id="translation">
-            <option value="khattab">Mustafa Khattab — The Clear Quran</option>
-            <option value="pickthall">Marmaduke Pickthall</option>
-          </select>
-        </div>
-        <div class="setting">
-          <label for="show-arabic">Show Arabic</label>
-          <input type="checkbox" id="show-arabic" />
-        </div>
-      </section>
-    </main>
+
+        <!-- Verse of the day, styled as a Discord embed. -->
+        <section class="embed" id="verse" aria-label="Verse of the day">
+          <div class="embed-head">
+            <span class="embed-author">Verse of the day</span>
+            <span class="embed-tag" id="verse-theme"></span>
+          </div>
+          <p class="verse-arabic" id="verse-arabic" dir="rtl" lang="ar"></p>
+          <p class="verse-translation" id="verse-translation"></p>
+          <div class="embed-foot">
+            <span class="embed-ref" id="verse-ref"></span>
+            <span class="embed-actions">
+              <button id="verse-draw" class="icon-button" type="button" title="Another verse" aria-label="Another verse">
+                <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M13.5 7a5.5 5.5 0 1 0-.9 4" />
+                  <path d="M13.6 3v3.4h-3.4" />
+                </svg>
+              </button>
+              <button id="verse-copy" class="icon-button" type="button" title="Copy" aria-label="Copy verse">
+                <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true">
+                  <rect x="5.75" y="5.75" width="8" height="8" rx="1.5" />
+                  <path d="M10.25 3.25a1.5 1.5 0 0 0-1.5-1.5h-5a1.5 1.5 0 0 0-1.5 1.5v5a1.5 1.5 0 0 0 1.5 1.5" />
+                </svg>
+              </button>
+            </span>
+          </div>
+        </section>
+
+        <!-- User panel -->
+        <footer class="panel">
+          <span class="avatar">
+            <span class="avatar-glyph">&#1605;</span>
+            <span class="avatar-status" id="daemon-dot" title="Daemon offline"></span>
+          </span>
+          <span class="panel-copy">
+            <span class="panel-name">MuslimSync</span>
+            <span class="panel-sub" id="status-left">daemon offline</span>
+          </span>
+          <button class="panel-button" data-view="settings" type="button" title="Settings" aria-label="Settings">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="3.2" />
+              <path d="M12 2v2.6M12 19.4V22M22 12h-2.6M4.6 12H2M19.07 4.93l-1.84 1.84M6.77 17.23l-1.84 1.84M19.07 19.07l-1.84-1.84M6.77 6.77 4.93 4.93" />
+            </svg>
+          </button>
+        </footer>
+      </aside>
+
+      <!-- Main column -->
+      <div class="main">
+        <header class="topbar">
+          <span class="topbar-icon">#</span>
+          <span class="topbar-name" id="topbar-name">projects</span>
+          <span class="topbar-divider"></span>
+          <span class="topbar-note" id="topbar-note">Each served project runs its own Argon sync server</span>
+        </header>
+
+        <main class="content">
+          <section class="page" id="view-projects" data-note="Each served project runs its own Argon sync server">
+            <div class="hero">
+              <span class="hero-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round">
+                  <path d="M2.75 6.75a1.5 1.5 0 0 1 1.5-1.5h5l2 2h8.5a1.5 1.5 0 0 1 1.5 1.5v8.5a1.5 1.5 0 0 1-1.5 1.5H4.25a1.5 1.5 0 0 1-1.5-1.5V6.75z" />
+                </svg>
+              </span>
+              <h1 class="hero-title">No projects yet</h1>
+              <p class="hero-body">
+                Choose a projects folder to get started, or press <strong>Create Project</strong> in the
+                Studio plugin and it shows up here automatically.
+              </p>
+              <div class="hero-actions">
+                <button class="button is-primary" type="button" disabled>Choose folder</button>
+                <button class="button" type="button" disabled>Add existing</button>
+              </div>
+              <span class="stage">Milestone 3</span>
+            </div>
+          </section>
+
+          <section class="page is-hidden" id="view-activity" data-note="Live sync events from the connected plugin">
+            <div class="hero">
+              <span class="hero-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M2 12.5h4L9 6l4.5 12L17 12.5h5" />
+                </svg>
+              </span>
+              <h1 class="hero-title">Nothing syncing</h1>
+              <p class="hero-body">File writes and Studio changes stream here once a project is being served.</p>
+              <span class="stage">Milestone 3</span>
+            </div>
+          </section>
+
+          <section class="page is-hidden" id="view-conflicts" data-note="Two-way edits that need a decision">
+            <div class="hero">
+              <span class="hero-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round">
+                  <path d="M12 3 2.5 20h19L12 3z" />
+                  <path d="M12 9.5v5M12 17v.8" stroke-linecap="round" />
+                </svg>
+              </span>
+              <h1 class="hero-title">No conflicts</h1>
+              <p class="hero-body">When disk and Studio disagree on the same script, the choice lands here.</p>
+              <span class="stage">Milestone 3</span>
+            </div>
+          </section>
+
+          <section class="page is-hidden" id="view-commands" data-note="Drop a folder in .muslimsync/commands and it appears here">
+            <div class="hero">
+              <span class="hero-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M5 7.5 8.5 11 5 14.5" />
+                  <path d="M11.5 15h7.5" />
+                </svg>
+              </span>
+              <h1 class="hero-title">No custom commands</h1>
+              <p class="hero-body">
+                A command is a folder with a <code>command.json</code> and a handler. Registering one
+                gives you the CLI command, a button here, and an agent registry entry at once.
+              </p>
+              <span class="stage">Milestone 6</span>
+            </div>
+          </section>
+
+          <section class="page is-hidden" id="view-capture" data-note="Render models, exact camera views, and UI subtrees">
+            <div class="hero">
+              <span class="hero-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round">
+                  <path d="M3 8.5A1.5 1.5 0 0 1 4.5 7h2.7l1.4-2h6.8l1.4 2h2.7A1.5 1.5 0 0 1 21 8.5v9A1.5 1.5 0 0 1 19.5 19h-15A1.5 1.5 0 0 1 3 17.5v-9z" />
+                  <circle cx="12" cy="13" r="3.4" />
+                </svg>
+              </span>
+              <h1 class="hero-title">Capture</h1>
+              <p class="hero-body">Isolated renders with transparent backgrounds — no screenshot permission needed.</p>
+              <span class="stage">Milestone 4</span>
+            </div>
+          </section>
+
+          <section class="page is-hidden" id="view-playtest" data-note="Scripted playtests with streamed events">
+            <div class="hero">
+              <span class="hero-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round">
+                  <path d="M8 5.5v13l11-6.5-11-6.5z" />
+                </svg>
+              </span>
+              <h1 class="hero-title">Playtest</h1>
+              <p class="hero-body">Run a playscript across a PlayServer and any number of PlayClients, and watch it stream.</p>
+              <span class="stage">Milestone 7</span>
+            </div>
+          </section>
+
+          <section class="page is-hidden" id="view-settings" data-note="Stored in ~/.muslimsync/settings.json">
+            <div class="settings">
+              <h2 class="group-title">Daily verse</h2>
+              <div class="group">
+                <div class="row">
+                  <div class="row-copy">
+                    <span class="row-label">Reminder</span>
+                    <span class="row-help">A notification with the day's verse.</span>
+                  </div>
+                  <label class="switch">
+                    <input type="checkbox" id="reminder-enabled" />
+                    <span class="switch-track" aria-hidden="true"></span>
+                  </label>
+                </div>
+                <div class="row">
+                  <div class="row-copy">
+                    <span class="row-label">Time</span>
+                    <span class="row-help">If the machine was asleep, it arrives on wake.</span>
+                  </div>
+                  <input class="field" type="time" id="reminder-time" />
+                </div>
+                <div class="row">
+                  <div class="row-copy">
+                    <span class="row-label">Translation</span>
+                    <span class="row-help" id="translation-help"></span>
+                  </div>
+                  <select class="field" id="translation">
+                    <option value="khattab">Mustafa Khattab — The Clear Quran</option>
+                    <option value="pickthall">Marmaduke Pickthall</option>
+                  </select>
+                </div>
+                <div class="row">
+                  <div class="row-copy">
+                    <span class="row-label">Show Arabic</span>
+                    <span class="row-help">Uthmani script above the translation.</span>
+                  </div>
+                  <label class="switch">
+                    <input type="checkbox" id="show-arabic" />
+                    <span class="switch-track" aria-hidden="true"></span>
+                  </label>
+                </div>
+              </div>
+            </div>
+          </section>
+        </main>
+      </div>
+    </div>
 
     <script type="module" src="app.js"></script>
   </body>

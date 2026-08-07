@@ -1,13 +1,23 @@
 const api = window.muslimsync;
 
+const TRANSLATION_NOTES = {
+  khattab: "Modern English. The default on Quran.com.",
+  pickthall: "Public domain, more archaic register.",
+};
+
 const el = {
   arabic: document.getElementById("verse-arabic"),
   translation: document.getElementById("verse-translation"),
   ref: document.getElementById("verse-ref"),
+  theme: document.getElementById("verse-theme"),
   draw: document.getElementById("verse-draw"),
   copy: document.getElementById("verse-copy"),
   card: document.getElementById("verse"),
+  statusLeft: document.getElementById("status-left"),
 };
+
+// Captured before any swap so the icon can be restored exactly.
+const copyIcon = el.copy.innerHTML;
 
 let state = { verse: null, translation: "khattab", showArabic: true };
 
@@ -22,6 +32,7 @@ function render() {
 
   el.translation.textContent = verse.verses.map((v) => v.translations[translation]).join(" ");
   el.ref.textContent = `${verse.surah.name} ${verse.ref}`;
+  el.theme.textContent = verse.theme ?? "";
 }
 
 async function loadToday() {
@@ -29,18 +40,16 @@ async function loadToday() {
   render();
 }
 
-async function drawAnother() {
+el.draw.addEventListener("click", async () => {
   const pool = await api.verse.pool();
   const others = pool.filter((ref) => ref !== state.verse?.ref);
   const ref = others[Math.floor(Math.random() * others.length)];
 
   // Only the displayed verse changes — the day's verse is a property of the
   // date, so redrawing must not overwrite it in settings.
-  state = { ...state, verse: await api.verse.draw(ref) };
+  state = { ...state, verse: { ...(await api.verse.draw(ref)), theme: null } };
   render();
-}
-
-el.draw.addEventListener("click", drawAnother);
+});
 
 el.copy.addEventListener("click", async () => {
   const { verse, translation } = state;
@@ -50,8 +59,11 @@ el.copy.addEventListener("click", async () => {
   await api.verse.copy(`${body}\n— ${verse.surah.name} ${verse.ref}`);
 
   el.copy.textContent = "✓";
+  el.copy.classList.add("is-done");
+
   setTimeout(() => {
-    el.copy.innerHTML = "&#8690;";
+    el.copy.innerHTML = copyIcon;
+    el.copy.classList.remove("is-done");
   }, 1200);
 });
 
@@ -64,15 +76,33 @@ api.verse.onFocus(() => {
 
 // ------------------------------------------------------------ navigation
 
-for (const button of document.querySelectorAll(".nav-item")) {
-  button.addEventListener("click", () => {
-    for (const other of document.querySelectorAll(".nav-item")) {
-      other.classList.toggle("is-active", other === button);
-    }
-    for (const view of document.querySelectorAll(".view")) {
-      view.classList.toggle("is-hidden", view.id !== `view-${button.dataset.view}`);
-    }
-  });
+const channels = [...document.querySelectorAll(".channel")];
+const topbar = {
+  name: document.getElementById("topbar-name"),
+  note: document.getElementById("topbar-note"),
+};
+
+function show(view) {
+  let page = null;
+
+  for (const candidate of document.querySelectorAll(".page")) {
+    const isTarget = candidate.id === `view-${view}`;
+    candidate.classList.toggle("is-hidden", !isTarget);
+    if (isTarget) page = candidate;
+  }
+
+  // Settings opens from the gear in the user panel, not from a channel, so
+  // every channel deselects rather than one staying lit on the wrong view.
+  for (const channel of channels) {
+    channel.classList.toggle("is-active", channel.dataset.view === view);
+  }
+
+  topbar.name.textContent = view;
+  topbar.note.textContent = page?.dataset.note ?? "";
+}
+
+for (const source of [...channels, ...document.querySelectorAll(".panel-button[data-view]")]) {
+  source.addEventListener("click", () => show(source.dataset.view));
 }
 
 // -------------------------------------------------------------- settings
@@ -81,10 +111,15 @@ const controls = {
   enabled: document.getElementById("reminder-enabled"),
   time: document.getElementById("reminder-time"),
   translation: document.getElementById("translation"),
+  translationHelp: document.getElementById("translation-help"),
   showArabic: document.getElementById("show-arabic"),
 };
 
 const pad = (n) => String(n).padStart(2, "0");
+
+function showTranslationNote() {
+  controls.translationHelp.textContent = TRANSLATION_NOTES[controls.translation.value] ?? "";
+}
 
 async function loadSettings() {
   const settings = await api.settings.get();
@@ -93,6 +128,8 @@ async function loadSettings() {
   controls.time.value = `${pad(settings.reminder.hour)}:${pad(settings.reminder.minute)}`;
   controls.translation.value = settings.translation;
   controls.showArabic.checked = settings.showArabic;
+
+  showTranslationNote();
 }
 
 async function saveReminder() {
@@ -111,6 +148,7 @@ controls.time.addEventListener("change", saveReminder);
 controls.translation.addEventListener("change", async () => {
   state = { ...state, translation: controls.translation.value };
   render();
+  showTranslationNote();
   await api.settings.set({ translation: controls.translation.value });
 });
 
