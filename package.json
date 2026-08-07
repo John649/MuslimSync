@@ -8,7 +8,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "start": "electron .",
+    "start": "node scripts/start.mjs",
     "daemon": "node daemon/index.js",
     "test": "node --test \"**/*.test.js\"",
     "lint:plugin": "cd plugin && selene src/ && stylua --check src/",
@@ -17,7 +17,8 @@
     "check": "npm run test && npm run lint:plugin && node scripts/check-file-size.mjs",
     "dev:plugin": "node scripts/build-plugin.mjs --watch --install",
     "make:icons": "node scripts/make-icons.mjs",
-    "make:app": "node scripts/make-app.mjs"
+    "make:app": "node scripts/make-app.mjs",
+    "start:dev": "electron ."
   },
   "devDependencies": {
     "electron": "^33.0.0"

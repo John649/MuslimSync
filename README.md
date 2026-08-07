@@ -12,17 +12,21 @@ npm run build:plugin -- --install   # builds the plugin into Studio's plugins fo
 npm start                           # launches the app, which hosts the daemon
 ```
 
-`npm start` launches through Electron's own bundle, so macOS calls the app
-"Electron" and gives it Electron's icon. For a real Dock entry:
+On macOS `npm start` builds `dist/MuslimSync.app` and opens that, because
+running `electron .` directly launches Electron's *own* bundle — and macOS
+takes the Dock name, the icon and the menu bar title from whichever bundle it
+launched, which is why that route calls the app "Electron". No package.json
+field can override it.
 
-```bash
-npm run make:app     # builds dist/MuslimSync.app
-```
-
-That bundle is a shortcut, not a distributable: it points back at this checkout,
+The bundle is a shortcut, not a distributable: it points back at this checkout,
 so editing `app/` takes effect on the next launch with nothing to rebuild.
 Nothing is compiled — it is a folder with a plist in it. Drag it to the Dock or
 to Applications.
+
+```bash
+npm run start:dev    # raw electron, logs in the terminal, Electron branding
+npm run make:app     # rebuild the bundle on its own
+```
 
 Then open a place in Studio. The plugin connects to the daemon on port 7900, and
 `msync` starts answering.

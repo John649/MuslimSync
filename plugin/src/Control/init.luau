@@ -13,6 +13,7 @@ local HttpService = game:GetService("HttpService")
 
 local MuslimSync = script:FindFirstAncestor("MuslimSync")
 
+local Discovery = require(MuslimSync.Discovery)
 local Log = require(MuslimSync.Log)
 
 local Handlers = require(script.Handlers)
@@ -204,7 +205,10 @@ function Control:connect(): boolean
 		protocol = PROTOCOL,
 		placeId = tostring(game.PlaceId),
 		gameId = tostring(game.GameId),
-		placeName = game.Name,
+		-- The place's real title, not the DataModel's name: `game.Name` is
+		-- "Place1" even for a published place, so every rail icon in the app
+		-- came out as an indistinguishable "P".
+		placeName = Discovery.placeName(),
 		pluginVersion = Handlers.version(),
 	})
 
