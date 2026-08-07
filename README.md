@@ -26,6 +26,9 @@ to Applications.
 ```bash
 npm run start:dev    # raw electron, logs in the terminal, Electron branding
 npm run make:app     # rebuild the bundle on its own
+
+# Driving the real app over CDP, branded rather than as "Electron":
+open dist/MuslimSync.app --args --remote-debugging-port=9333
 ```
 
 Then open a place in Studio. The plugin connects to the daemon on port 7900, and

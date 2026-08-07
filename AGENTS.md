@@ -44,6 +44,11 @@ twice in this project's history, both times after the commit had already landed.
   on a major.minor mismatch.
 - **AGENTS.md is generated.** Edit `cli/agents.js`, then `npm run gen:agents`.
   `npm run check` fails if the committed copy is stale.
+- **Do not verify the app with `npx electron .`.** It launches Electron's own
+  bundle, so the Dock and menu bar say "Electron" until someone notices and
+  restarts it. To drive the real app over CDP:
+  `open dist/MuslimSync.app --args --remote-debugging-port=9333` — branded and
+  debuggable. `npm run start:dev` is the raw form and is for terminal logs.
 - macOS arm64 is the only platform vendored or tested.
 
 ## Commands
