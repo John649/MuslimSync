@@ -46,9 +46,6 @@ const CONVENTIONS = `## Conventions worth knowing
   checks that make it safe.
 - **Every write is one undo step.** A failed write is rolled back rather than
   half-applied.
-- **There is no save command.** Studio does not expose a save API to plugins —
-  \`game.Save\` is not indexable at all — so saving the place is the user
-  pressing Cmd-S. Ask them; do not claim to have saved.
 - **Reads are free and cheap.** Prefer \`ls\`/\`tree\`/\`query\` over \`eval\` for
   anything you could look up; \`eval\` runs arbitrary code in the user's open
   place.
