@@ -34,7 +34,6 @@ local Widget = require(Components.Plugin.Widget)
 local Container = require(Components.Container)
 local Wordmark = require(Components.Wordmark)
 local Padding = require(Components.Padding)
-local Text = require(Components.Text)
 local List = require(Components.List)
 
 local NotConnected = require(Pages.NotConnected)
@@ -193,18 +192,12 @@ function App:setPage(page, fill)
 				Padding {
 					Padding = Theme.WidgetPadding,
 				},
-				Container {
-					Size = UDim2.fromScale(1, 0),
-					[Children] = {
-						Wordmark {},
-						Text {
-							AnchorPoint = Vector2.new(1, 1),
-							Position = UDim2.new(1, -3, 1, 0),
-							Text = `v{manifest.package.version}`,
-							Color = Theme.Colors.TextDimmed,
-							TextSize = Theme.TextSize.Small,
-						},
-					},
+				-- Wordmark owns the whole header row, version included. The
+				-- version used to be absolutely positioned inside an
+				-- auto-sizing container, which resolved circularly and left a
+				-- few hundred pixels of empty space above the controls.
+				Wordmark {
+					Version = manifest.package.version,
 				},
 				Container {
 					AutomaticSize = if fill then Enum.AutomaticSize.None else Enum.AutomaticSize.Y,
