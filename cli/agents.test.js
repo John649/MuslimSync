@@ -145,3 +145,17 @@ test("the repo's own build rules are never installed into someone else's project
   assert.ok(!renderSection().includes("Working on this repo"));
   assert.ok(!mergeInto("# Game\n").includes("Working on this repo"));
 });
+
+test("headings keep the blank line under them", () => {
+  // Markdown renderers need it, and an earlier version filtered the deliberate
+  // blank-line separators out along with the parts that did not apply — every
+  // heading ended up glued to the line below it.
+  const markdown = renderAgentsMd();
+
+  assert.match(markdown, /## Commands\n\n### /);
+  assert.doesNotMatch(markdown, /^#{1,4} .*\n#{1,4} /m, "a heading is followed directly by another");
+});
+
+test("the installed section keeps them too", () => {
+  assert.match(renderSection(), /### Commands\n\n#### /);
+});

@@ -41,6 +41,7 @@ twice in this project's history, both times after the commit had already landed.
 - macOS arm64 is the only platform vendored or tested.
 
 ## Commands
+
 ### Navigate
 
 | Command | Does |
@@ -74,6 +75,7 @@ twice in this project's history, both times after the commit had already landed.
 | `undo` | Undo the last change |
 | `redo` | Redo the last undone change |
 | `ping` | Round-trip the plugin and report latency |
+
 ### Also available
 
 Not spelled out here. `msync help <group>` lists any of these in full.
@@ -85,6 +87,7 @@ Not spelled out here. `msync help <group>` lists any of these in full.
 | Transfer | `copy`, `paste` |
 | Info | `capabilities`, `status`, `projects`, `commands`, `doctor`, `help`, `agents` |
 | Deen | `verse` |
+
 ## Conventions worth knowing
 
 - **Paths** are `/`-separated from the DataModel root: `Workspace/Baseplate`.

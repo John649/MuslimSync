@@ -226,6 +226,9 @@ export function renderAgentsMd({ groups, repo = false } = {}) {
   const shown = groups === "all" ? known : (groups ?? CORE).filter((group) => known.includes(group));
   const omitted = known.filter((group) => !shown.includes(group));
 
+  // null means "this part does not apply"; an empty string is a deliberate
+  // blank line. Filtering both — which an earlier version did — collapsed
+  // every heading onto the line under it.
   return [
     PREAMBLE,
     repo ? REPO : null,
@@ -233,7 +236,7 @@ export function renderAgentsMd({ groups, repo = false } = {}) {
     "",
     commandRows(byGroup, shown),
     "",
-    index(byGroup, omitted),
+    omitted.length ? index(byGroup, omitted) : null,
     omitted.length ? "" : null,
     CONVENTIONS,
     // Only when playtests are in scope. Explaining the verdict convention to an
@@ -242,7 +245,7 @@ export function renderAgentsMd({ groups, repo = false } = {}) {
     shown.includes("Playtest") ? PLAYTESTS : null,
     CLOSING,
   ]
-    .filter((part) => part !== null && part !== "")
+    .filter((part) => part !== null)
     .join("\n");
 }
 
