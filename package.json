@@ -17,7 +17,8 @@
     "lint:plugin": "cd plugin && selene src/ && stylua --check src/",
     "build:plugin": "node scripts/build-plugin.mjs",
     "build:quran": "node quran/build-dataset.mjs",
-    "check": "npm run test && npm run lint:plugin && node scripts/check-file-size.mjs"
+    "check": "npm run test && npm run lint:plugin && node scripts/check-file-size.mjs",
+    "dev:plugin": "node scripts/build-plugin.mjs --watch --install"
   },
   "devDependencies": {
     "electron": "^33.0.0"

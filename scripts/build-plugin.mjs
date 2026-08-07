@@ -30,10 +30,26 @@ if (!existsSync(binary)) {
   process.exit(1);
 }
 
-const output = path.join(ROOT, "dist", "MuslimSync.rbxm");
-mkdirSync(path.dirname(output), { recursive: true });
+// --install writes straight into Studio's plugins folder instead of dist/, and
+// --watch rebuilds on every save. Together they are the iteration loop: Studio
+// reloads a local plugin when its file changes, so a save is visible in a
+// couple of seconds without touching the Studio UI.
+const install = process.argv.includes("--install");
+const watch = process.argv.includes("--watch");
 
-const result = spawnSync(binary, ["build", "--output", output, "--yes"], {
+const args = ["build", "--yes"];
+
+if (install) {
+  args.push("--plugin");
+} else {
+  const output = path.join(ROOT, "dist", "MuslimSync.rbxm");
+  mkdirSync(path.dirname(output), { recursive: true });
+  args.push("--output", output);
+}
+
+if (watch) args.push("--watch");
+
+const result = spawnSync(binary, args, {
   cwd: path.join(ROOT, "plugin"),
   stdio: "inherit",
 });
