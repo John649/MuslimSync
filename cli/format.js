@@ -261,6 +261,30 @@ export function help(custom = []) {
   return lines.join("\n");
 }
 
+/**
+ * Every command in one group, in full.
+ *
+ * The agent brief indexes the groups it left out and points here, so this is
+ * the other half of that promise: naming a group has to produce the commands.
+ */
+export function groupHelp(name) {
+  const wanted = GROUPS.find((group) => group.toLowerCase() === name.toLowerCase());
+  if (!wanted) return null;
+
+  const entries = Object.entries(COMMANDS).filter(([, spec]) => spec.group === wanted);
+  if (!entries.length) return null;
+
+  const width = Math.max(...entries.map(([command]) => command.length));
+
+  return [
+    bold(wanted),
+    "",
+    ...entries.map(([command, spec]) => `  ${command.padEnd(width)}  ${spec.summary}`),
+    "",
+    dim(`msync help <command> for flags and examples`),
+  ].join("\n");
+}
+
 /** Per-command help, also derived. */
 export function commandHelp(name) {
   const spec = COMMANDS[name];

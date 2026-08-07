@@ -21,7 +21,7 @@ try {
   process.exit(1);
 }
 
-if (current !== renderAgentsMd()) {
+if (current !== renderAgentsMd({ repo: true })) {
   console.error("AGENTS.md is out of date with the command registry. Run: npm run gen:agents");
   process.exit(1);
 }

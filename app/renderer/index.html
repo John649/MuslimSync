@@ -169,7 +169,6 @@
               </span>
               <h1 class="hero-title">Nothing syncing</h1>
               <p class="hero-body">File writes and Studio changes stream here once a project is being served.</p>
-              <span class="stage">Milestone 3</span>
             </div>
           </section>
 
@@ -184,7 +183,6 @@
               </span>
               <h1 class="hero-title">No conflicts</h1>
               <p class="hero-body">When disk and Studio disagree on the same script, the choice lands here.</p>
-              <span class="stage">Milestone 3</span>
             </div>
           </section>
 
@@ -201,7 +199,6 @@
                 A command is a folder with a <code>command.json</code> and a handler. Registering one
                 gives you the CLI command, a button here, and an agent registry entry at once.
               </p>
-              <span class="stage">Milestone 6</span>
             </div>
           </section>
 
@@ -214,8 +211,10 @@
                 </svg>
               </span>
               <h1 class="hero-title">Capture</h1>
-              <p class="hero-body">Isolated renders with transparent backgrounds — no screenshot permission needed.</p>
-              <span class="stage">Milestone 4</span>
+              <p class="hero-body">
+                The Studio viewport as a PNG, optionally framed on one instance. Studio asks
+                for screen capture permission the first time.
+              </p>
             </div>
           </section>
 
@@ -227,13 +226,25 @@
                 </svg>
               </span>
               <h1 class="hero-title">Playtest</h1>
-              <p class="hero-body">Run a playscript across a PlayServer and any number of PlayClients, and watch it stream.</p>
-              <span class="stage">Milestone 7</span>
+              <p class="hero-body">
+                Run a Luau file inside a real playtest — server or client, single or
+                multiplayer — and get a pass or fail back.
+              </p>
             </div>
           </section>
 
           <section class="page is-hidden" id="view-settings" data-note="Stored in ~/.muslimsync/settings.json">
             <div class="settings">
+              <h2 class="group-title">Sync</h2>
+
+              <div class="row">
+                <div class="row-copy">
+                  <span class="row-label">Projects folder</span>
+                  <span class="row-help" id="settings-root">—</span>
+                </div>
+                <button class="button" type="button" id="settings-choose-root">Change</button>
+              </div>
+
               <h2 class="group-title">Daily verse</h2>
               <div class="group">
                 <div class="row">

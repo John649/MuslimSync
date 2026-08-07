@@ -7,13 +7,13 @@
 
 import { parse, bind, coerce, UsageError } from "./args.js";
 import { COMMANDS, registry } from "./commands.js";
-import { render, help, commandHelp, red, dim } from "./format.js";
+import { render, help, commandHelp, groupHelp, red, dim } from "./format.js";
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { discover, bindArgs, run as runCommand } from "../daemon/commands.js";
 import { runTest, formatVerdict, TestFailure } from "./playtest.js";
-import { renderAgentsMd, mergeInto } from "./agents.js";
+import { renderAgentsMd, mergeInto, groupNames } from "./agents.js";
 
 const APP_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -74,9 +74,30 @@ async function local(name, { flags, positionals = [], port }) {
       return { json: registry() };
 
     case "agents": {
+      // Narrowed to what a project actually does: a place that never captures
+      // anything should not spend context explaining capture.
+      let options;
+
+      if (typeof flags.only === "string") {
+        const known = groupNames();
+        const wanted = flags.only.split(",").map((part) => part.trim()).filter(Boolean);
+        const resolved = wanted.map((name) => known.find((group) => group.toLowerCase() === name.toLowerCase()));
+        const unknown = wanted.filter((_, index) => !resolved[index]);
+
+        if (unknown.length) {
+          throw new UsageError(`unknown group(s): ${unknown.join(", ")}. Known: ${known.join(", ")}`);
+        }
+
+        options = { groups: resolved };
+      } else if (flags.all) {
+        options = { groups: "all" };
+      }
+
+      const markdown = renderAgentsMd(options);
+
       // Printed as well as committed: an agent pointed at a machine, rather
       // than at the repo, still has a way to ask what this tool can do.
-      if (!flags.install) return { text: renderAgentsMd(), json: { markdown: renderAgentsMd() } };
+      if (!flags.install) return { text: markdown, json: { markdown } };
 
       // A game's repository is where an agent actually works, and it has no
       // reason to know this tool exists. `gh` is recognised because it is in
@@ -90,7 +111,7 @@ async function local(name, { flags, positionals = [], port }) {
         // A project with no AGENTS.md yet is the common case, not an error.
       }
 
-      const after = mergeInto(before);
+      const after = mergeInto(before, options);
 
       if (after === before) return { text: `${target} is already up to date`, json: { path: target, changed: false } };
 
@@ -310,8 +331,16 @@ async function main(argv) {
   if (!command || command === "help") {
     // `msync help photo` is the form people reach for first, and answering it
     // with the full index makes the tool look like it has no per-command help.
-    if (positionals[0] && COMMANDS[positionals[0]]) {
-      process.stdout.write(`${commandHelp(positionals[0])}\n`);
+    const topic = positionals[0];
+
+    // "playtest" is both a command and a group. Showing only the command would
+    // silently ignore the group the agent brief told the caller to ask for, so
+    // when a name is both, both are printed.
+    const asCommand = topic && COMMANDS[topic] ? commandHelp(topic) : null;
+    const asGroup = topic ? groupHelp(topic) : null;
+
+    if (asCommand || asGroup) {
+      process.stdout.write(`${[asCommand, asGroup].filter(Boolean).join("\n\n")}\n`);
       return EXIT.ok;
     }
 

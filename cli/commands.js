@@ -223,8 +223,16 @@ export const COMMANDS = {
     local: "agents",
     group: "Info",
     summary: "Print the agent brief, or install it into a project's AGENTS.md",
-    flags: { install: "add or refresh the MuslimSync section in <dir>/AGENTS.md (default .)" },
-    examples: ["msync agents", "msync agents --install", "msync agents --install ~/projects/MyGame"],
+    flags: {
+      install: "add or refresh the MuslimSync section in <dir>/AGENTS.md (default .)",
+      only: "comma-separated groups to spell out; the rest are indexed",
+      all: "spell out every group",
+    },
+    examples: [
+      "msync agents",
+      "msync agents --only navigate,write",
+      "msync agents --install ~/projects/MyGame --only navigate,write,playtest",
+    ],
   },
 };
 

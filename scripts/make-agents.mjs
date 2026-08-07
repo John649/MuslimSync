@@ -14,5 +14,7 @@ import { renderAgentsMd } from "../cli/agents.js";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const OUT = path.join(ROOT, "AGENTS.md");
 
-writeFileSync(OUT, renderAgentsMd());
+// repo: true adds the contributing rules, which belong to this repository and
+// are never installed into someone else's project.
+writeFileSync(OUT, renderAgentsMd({ repo: true }));
 console.log(`wrote ${path.relative(ROOT, OUT)}`);

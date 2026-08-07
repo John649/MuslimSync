@@ -20,6 +20,8 @@ const el = {
   projectsEmpty: document.getElementById("projects-empty"),
   projectsRoot: document.getElementById("projects-root"),
   chooseRoot: document.getElementById("choose-root"),
+  settingsRoot: document.getElementById("settings-root"),
+  settingsChooseRoot: document.getElementById("settings-choose-root"),
   addExisting: document.getElementById("add-existing"),
 };
 
@@ -141,6 +143,10 @@ api.daemon.status().then(renderStatus);
 function renderProjects({ projects, root }) {
   el.projectList.replaceChildren();
   el.projectsRoot.textContent = root;
+  // Also in Settings, because the button on this page lives in the empty state
+  // and vanishes the moment there is a project — which is exactly when someone
+  // wants to move the folder.
+  el.settingsRoot.textContent = root;
 
   const any = projects.length > 0;
   el.projectList.classList.toggle("is-hidden", !any);
@@ -184,7 +190,7 @@ function folderPicker(button, pick) {
 
     try {
       const result = await pick();
-      if (result.error) el.projectsRoot.textContent = result.error;
+      if (result.error) el.settingsRoot.textContent = result.error;
       else if (result.ok) await loadProjects();
     } finally {
       button.disabled = false;
@@ -193,6 +199,7 @@ function folderPicker(button, pick) {
 }
 
 folderPicker(el.chooseRoot, () => api.projects.chooseRoot());
+folderPicker(el.settingsChooseRoot, () => api.projects.chooseRoot());
 folderPicker(el.addExisting, () => api.projects.addExisting());
 
 api.projects.onChange(loadProjects);

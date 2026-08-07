@@ -7,8 +7,40 @@ Requires the MuslimSync app running (it hosts the daemon on port 7900) and a
 Studio place open with the plugin connected. `msync status` says whether both
 are true; check it first if anything else fails.
 
-## Commands
+## Working on this repo
 
+```bash
+npm run check                     # tests, plugin lint, file-size gate, this file's drift gate
+npm run build:plugin -- --install # build the plugin into Studio's plugins folder
+npm run gen:agents                # regenerate the tool section below
+```
+
+**Run `npm run check` before committing, not after.** It has caught a red gate
+twice in this project's history, both times after the commit had already landed.
+
+- **No Rust is written.** Argon is vendored as a prebuilt binary in
+  `vendor/argon/`. The sync engine is not ours to modify.
+- **Files are capped at 400 lines**, enforced by `scripts/check-file-size.mjs`
+  with an explicit grandfather list. Split by responsibility, not by line count.
+- **Studio does not hot-reload plugins.** After `build:plugin --install` you
+  must restart Studio, or you are testing the previous build. This has produced
+  more than one phantom bug report.
+- **Verify Roblox APIs before using them.** Several plausible-sounding ones do
+  not exist — `HttpService:Base64Encode`, `ChangeHistoryService:CanUndo`,
+  `PluginConnectionService:Connect`, `PluginConnection.MessageReceived`. Grep
+  a working plugin for the real name; it settles in one look and guessing has
+  cost hours.
+- **Wire identifiers keep Argon's name on purpose**: `x-argon-token`,
+  `argonId`, `~/.argon/`, `rbxasset://argon/`, `ArgonEmpty`. Renaming them
+  breaks compatibility with the vendored binary. The product name is
+  `plugin/src/Version.luau`.
+- **`plugin/wally.toml`'s version is load-bearing.** The server refuses to sync
+  on a major.minor mismatch.
+- **AGENTS.md is generated.** Edit `cli/agents.js`, then `npm run gen:agents`.
+  `npm run check` fails if the committed copy is stale.
+- macOS arm64 is the only platform vendored or tested.
+
+## Commands
 ### Navigate
 
 | Command | Does |
@@ -43,48 +75,17 @@ are true; check it first if anything else fails.
 | `redo` | Redo the last undone change |
 | `save` | Ask Studio to save the place |
 | `ping` | Round-trip the plugin and report latency |
+### Also available
 
-### Capture
+Not spelled out here. `msync help <group>` lists any of these in full.
 
-| Command | Does |
+| Group | Commands |
 | --- | --- |
-| `photo` | Capture the Studio viewport as a PNG |
-| `authorize` | Ask Studio for screen capture permission |
-
-### Playtest
-
-| Command | Does |
-| --- | --- |
-| `playtest [mode]` | Start a playtest (play, run, or multiplayer) |
-| `playing` | Is a playtest running, and which contexts are up |
-| `stop` | End the running playtest |
-| `run [source]` | Run Luau inside a playtest context |
-| `test <file>` | Run a Luau file in a fresh playtest and report pass or fail |
-
-### Transfer
-
-| Command | Does |
-| --- | --- |
-| `copy [paths...]` | Copy instances to the cross-project clipboard |
-| `paste [to]` | Paste the clipboard into the connected place |
-
-### Info
-
-| Command | Does |
-| --- | --- |
-| `capabilities` | What this plugin and Studio can do |
-| `status` | Daemon, plugin, and project status |
-| `projects` | List known projects |
-| `commands` | Machine-readable command registry |
-| `help` | Show this help |
-| `agents` | Print the agent brief, or install it into a project's AGENTS.md |
-
-### Deen
-
-| Command | Does |
-| --- | --- |
-| `verse` | Today's verse |
-
+| Capture | `photo`, `authorize` |
+| Playtest | `playtest`, `playing`, `stop`, `run`, `test` |
+| Transfer | `copy`, `paste` |
+| Info | `capabilities`, `status`, `projects`, `commands`, `help`, `agents` |
+| Deen | `verse` |
 ## Conventions worth knowing
 
 - **Paths** are `/`-separated from the DataModel root: `Workspace/Baseplate`.
@@ -115,16 +116,6 @@ Branch on these rather than parsing prose.
 | 4 | the plugin refused | read the message; it names the cause |
 | 5 | no daemon | ask the user to start the MuslimSync app |
 | 6 | a test failed | the place is wrong, not the tool |
-
-## Playtests
-
-`msync test <file.luau>` starts a playtest, runs the file inside it, stops the
-playtest whatever happens, and exits 0 or 6.
-
-The verdict convention is Lua's own: **a script that returns without throwing
-passes, `assert` fails.** A returned table comes back as JSON. Use
-`--context client` for client-side checks and `--mode multiplayer --players N`
-for replication.
 
 ## Adding a command
 

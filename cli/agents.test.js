@@ -4,25 +4,54 @@ import assert from "node:assert/strict";
 import { renderAgentsMd } from "./agents.js";
 import { COMMANDS } from "./commands.js";
 
-test("every command appears in the brief", () => {
+test("every command is reachable, spelled out or indexed", () => {
   // The point of generating this file: a command added to the registry cannot
-  // quietly go missing from what an agent reads.
+  // quietly go missing from what an agent reads. Commands outside the core
+  // groups appear as verbs in the index rather than as full rows, but an agent
+  // still has to be able to find out they exist.
   const markdown = renderAgentsMd();
 
   for (const name of Object.keys(COMMANDS)) {
-    assert.ok(markdown.includes(`\`${name}`), `${name} is missing from AGENTS.md`);
+    assert.ok(markdown.includes(`\`${name}`), `${name} is unreachable from AGENTS.md`);
   }
 });
 
-test("a command in an unlisted group is still included", () => {
+test("every group is reachable, spelled out or indexed", () => {
   // GROUPS is hand-ordered, so a new group would otherwise drop its commands
   // silently — the exact drift this generator exists to prevent.
   const markdown = renderAgentsMd();
-  const groups = new Set(Object.values(COMMANDS).map((spec) => spec.group));
 
-  for (const group of groups) {
-    assert.ok(markdown.includes(`### ${group}`), `group ${group} is missing`);
+  for (const group of new Set(Object.values(COMMANDS).map((spec) => spec.group))) {
+    assert.ok(
+      markdown.includes(`### ${group}`) || markdown.includes(`| ${group} |`),
+      `group ${group} is neither listed nor indexed`,
+    );
   }
+});
+
+test("narrowing to a group drops the others' detail but keeps them findable", () => {
+  // A place that never captures anything should not spend context explaining
+  // capture — but the agent must still learn that capture exists.
+  const narrow = renderAgentsMd({ groups: ["Navigate"] });
+
+  assert.match(narrow, /### Navigate/);
+  assert.ok(!narrow.includes("### Capture"), "Capture should not be spelled out");
+  assert.match(narrow, /\| Capture \|/, "Capture should still be indexed");
+  assert.ok(narrow.length < renderAgentsMd({ groups: "all" }).length);
+});
+
+test("playtest prose ships only when playtests are in scope", () => {
+  // Explaining the verdict convention to an agent that cannot run one is the
+  // clearest case of paying for context that will never be used.
+  assert.ok(!renderAgentsMd({ groups: ["Navigate"] }).includes("verdict convention"));
+  assert.match(renderAgentsMd({ groups: ["Playtest"] }), /verdict convention/);
+});
+
+test("the index tells the agent a command that actually exists", () => {
+  // It says to run `msync help <group>`; if that did nothing, indexing would be
+  // worse than omitting.
+  const markdown = renderAgentsMd();
+  assert.match(markdown, /msync help <group>/);
 });
 
 test("usage lines mark required and optional arguments distinctly", () => {
@@ -106,4 +135,13 @@ test("the section is nested a level below the project's own headings", () => {
 
   assert.ok(!/^# /m.test(section), "no h1 inside a section");
   assert.equal(section.match(/^## /gm).length, 1, "exactly one h2: the section title");
+});
+
+test("the repo's own build rules are never installed into someone else's project", () => {
+  // A game's repository wants the tool brief; MuslimSync's build rules there
+  // would be noise at best and misleading at worst.
+  assert.match(renderAgentsMd({ repo: true }), /Working on this repo/);
+  assert.ok(!renderAgentsMd().includes("Working on this repo"));
+  assert.ok(!renderSection().includes("Working on this repo"));
+  assert.ok(!mergeInto("# Game\n").includes("Working on this repo"));
 });

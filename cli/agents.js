@@ -17,6 +17,11 @@
 
 import { COMMANDS, GROUPS } from "./commands.js";
 
+// What almost every task needs. The rest is indexed instead of listed, because
+// a brief that spells out screen capture for an agent renaming a part has spent
+// the tokens either way.
+const CORE = ["Navigate", "Write", "Studio"];
+
 const PREAMBLE = `# MuslimSync
 
 Drives a running Roblox Studio from the command line: read and write the live
@@ -58,7 +63,15 @@ Branch on these rather than parsing prose.
 | 5 | no daemon | ask the user to start the MuslimSync app |
 | 6 | a test failed | the place is wrong, not the tool |
 
-## Playtests
+## Adding a command
+
+A folder with a \`command.json\` and one of \`run.js\`, \`run.luau\`, or
+\`workflow.json\` becomes a CLI verb, an app button, and a registry entry at
+once. Put it in \`<project>/.muslimsync/commands/\` to scope it to one project.
+See \`commands/\` for one of each kind.
+`;
+
+const PLAYTESTS = `## Playtests
 
 \`msync test <file.luau>\` starts a playtest, runs the file inside it, stops the
 playtest whatever happens, and exits 0 or 6.
@@ -67,13 +80,6 @@ The verdict convention is Lua's own: **a script that returns without throwing
 passes, \`assert\` fails.** A returned table comes back as JSON. Use
 \`--context client\` for client-side checks and \`--mode multiplayer --players N\`
 for replication.
-
-## Adding a command
-
-A folder with a \`command.json\` and one of \`run.js\`, \`run.luau\`, or
-\`workflow.json\` becomes a CLI verb, an app button, and a registry entry at
-once. Put it in \`<project>/.muslimsync/commands/\` to scope it to one project.
-See \`commands/\` for one of each kind.
 `;
 
 const CLOSING = `## Getting more detail
@@ -93,8 +99,8 @@ msync commands --raw      # the whole registry as JSON
   live and the user can see it too.
 `;
 
-/** One markdown row per command, so the table cannot drift from the CLI. */
-function commandRows() {
+/** Commands bucketed by group, in the order the CLI presents them. */
+function grouped() {
   const byGroup = new Map(GROUPS.map((group) => [group, []]));
 
   for (const [name, spec] of Object.entries(COMMANDS)) {
@@ -104,20 +110,92 @@ function commandRows() {
     byGroup.get(spec.group).push({ name, spec });
   }
 
+  return byGroup;
+}
+
+// How to work *on* MuslimSync, as opposed to how to use it. Deliberately never
+// part of renderSection(): a game's repository wants the tool brief, not this
+// project's build rules.
+//
+// Everything here was learned by getting it wrong first.
+const REPO = `## Working on this repo
+
+\`\`\`bash
+npm run check                     # tests, plugin lint, file-size gate, this file's drift gate
+npm run build:plugin -- --install # build the plugin into Studio's plugins folder
+npm run gen:agents                # regenerate the tool section below
+\`\`\`
+
+**Run \`npm run check\` before committing, not after.** It has caught a red gate
+twice in this project's history, both times after the commit had already landed.
+
+- **No Rust is written.** Argon is vendored as a prebuilt binary in
+  \`vendor/argon/\`. The sync engine is not ours to modify.
+- **Files are capped at 400 lines**, enforced by \`scripts/check-file-size.mjs\`
+  with an explicit grandfather list. Split by responsibility, not by line count.
+- **Studio does not hot-reload plugins.** After \`build:plugin --install\` you
+  must restart Studio, or you are testing the previous build. This has produced
+  more than one phantom bug report.
+- **Verify Roblox APIs before using them.** Several plausible-sounding ones do
+  not exist — \`HttpService:Base64Encode\`, \`ChangeHistoryService:CanUndo\`,
+  \`PluginConnectionService:Connect\`, \`PluginConnection.MessageReceived\`. Grep
+  a working plugin for the real name; it settles in one look and guessing has
+  cost hours.
+- **Wire identifiers keep Argon's name on purpose**: \`x-argon-token\`,
+  \`argonId\`, \`~/.argon/\`, \`rbxasset://argon/\`, \`ArgonEmpty\`. Renaming them
+  breaks compatibility with the vendored binary. The product name is
+  \`plugin/src/Version.luau\`.
+- **\`plugin/wally.toml\`'s version is load-bearing.** The server refuses to sync
+  on a major.minor mismatch.
+- **AGENTS.md is generated.** Edit \`cli/agents.js\`, then \`npm run gen:agents\`.
+  \`npm run check\` fails if the committed copy is stale.
+- macOS arm64 is the only platform vendored or tested.
+`;
+
+/** One markdown row per command, so the table cannot drift from the CLI. */
+function commandRows(byGroup, groups) {
   const sections = [];
 
-  for (const [group, entries] of byGroup) {
+  for (const group of groups) {
+    const entries = byGroup.get(group) ?? [];
     if (!entries.length) continue;
 
-    const lines = entries.map(({ name, spec }) => {
-      const args = usage(name, spec);
-      return `| \`${args}\` | ${spec.summary} |`;
-    });
+    const lines = entries.map(({ name, spec }) => `| \`${usage(name, spec)}\` | ${spec.summary} |`);
 
     sections.push([`### ${group}`, "", "| Command | Does |", "| --- | --- |", ...lines].join("\n"));
   }
 
   return sections.join("\n\n");
+}
+
+/**
+ * A line per group that was left out, naming how to expand it.
+ *
+ * Listing the verbs is the whole point: an agent has to know that capturing is
+ * possible to go looking for it, but does not need the flags until it does.
+ */
+function index(byGroup, omitted) {
+  const rows = [];
+
+  for (const group of omitted) {
+    const entries = byGroup.get(group) ?? [];
+    if (!entries.length) continue;
+
+    const verbs = entries.map(({ name }) => `\`${name}\``).join(", ");
+    rows.push(`| ${group} | ${verbs} |`);
+  }
+
+  if (!rows.length) return "";
+
+  return [
+    "### Also available",
+    "",
+    "Not spelled out here. `msync help <group>` lists any of these in full.",
+    "",
+    "| Group | Commands |",
+    "| --- | --- |",
+    ...rows,
+  ].join("\n");
 }
 
 /** The shortest true usage line for a command. */
@@ -133,9 +211,43 @@ function usage(name, spec) {
   return name;
 }
 
-/** The whole brief. Deterministic, so a drift check can compare it to disk. */
-export function renderAgentsMd() {
-  return [PREAMBLE, "## Commands", "", commandRows(), "", CONVENTIONS, CLOSING].join("\n");
+/**
+ * The brief. Deterministic, so a drift check can compare it to disk.
+ *
+ * `groups` narrows it to what a project actually does — a place that never
+ * captures anything should not spend context explaining capture. Passing "all"
+ * spells out everything.
+ */
+export function renderAgentsMd({ groups, repo = false } = {}) {
+  const byGroup = grouped();
+  const known = [...byGroup.keys()];
+
+  const shown = groups === "all" ? known : (groups ?? CORE).filter((group) => known.includes(group));
+  const omitted = known.filter((group) => !shown.includes(group));
+
+  return [
+    PREAMBLE,
+    repo ? REPO : null,
+    "## Commands",
+    "",
+    commandRows(byGroup, shown),
+    "",
+    index(byGroup, omitted),
+    omitted.length ? "" : null,
+    CONVENTIONS,
+    // Only when playtests are in scope. Explaining the verdict convention to an
+    // agent that cannot run one is the clearest case of paying for context
+    // that will never be used.
+    shown.includes("Playtest") ? PLAYTESTS : null,
+    CLOSING,
+  ]
+    .filter((part) => part !== null && part !== "")
+    .join("\n");
+}
+
+/** Group names, for the CLI to validate `--only` against. */
+export function groupNames() {
+  return [...grouped().keys()];
 }
 
 // Sentinels so an install can be repeated, and updated, without eating whatever
@@ -152,10 +264,10 @@ const END = "<!-- end muslimsync -->";
  * data, and nothing here is. So the brief has to travel to the project rather
  * than wait in this one.
  */
-export function renderSection() {
+export function renderSection(options) {
   // Every heading drops one level, deepest first so a level is never demoted
   // twice: this is a section inside the project's file, not the whole file.
-  const body = renderAgentsMd()
+  const body = renderAgentsMd(options)
     .replace(/^# MuslimSync\n/, "")
     .replace(/^### /gm, "#### ")
     .replace(/^## /gm, "### ");
@@ -169,8 +281,8 @@ export function renderSection() {
  * Idempotent: installing twice leaves one section, and re-installing after an
  * upgrade replaces the old one in place rather than stacking a second copy.
  */
-export function mergeInto(existing) {
-  const section = renderSection();
+export function mergeInto(existing, options) {
+  const section = renderSection(options);
 
   if (!existing || !existing.trim()) return section;
 
