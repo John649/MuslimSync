@@ -353,3 +353,13 @@ test("serving an existing project announces it too", async () => {
   assert.equal(status, 200);
   assert.ok(changes > before, "serving must refresh the list");
 });
+
+test("a new project is scaffolded with the agent brief", async () => {
+  // An agent working in a game repository has no reason to know msync exists,
+  // so the brief travels with the project rather than waiting in this one.
+  const created = await call("POST", "/createProject", { name: "Briefed", gameId: 900, placeId: 901 });
+  const brief = path.join(created.value.path, "AGENTS.md");
+
+  assert.ok(existsSync(brief), "expected AGENTS.md in the new project");
+  assert.match(readFileSync(brief, "utf8"), /## MuslimSync/);
+});

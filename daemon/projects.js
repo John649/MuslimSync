@@ -134,8 +134,19 @@ export function findByIdentity(projects, { gameId, placeId, argonId }) {
   }
 
   if (gameId) {
-    const byGame = projects.find((project) => project.gameId === Number(gameId));
-    if (byGame) return byGame;
+    // Only a project that has not claimed a place yet. A universe can hold many
+    // places and each is its own project — matching on gameId alone meant
+    // opening a second place in a universe adopted the first place's project
+    // and synced two different places into one folder.
+    //
+    // The narrow case this still serves is real: a project created for a game
+    // whose first place has not checked in, which is how create-then-claim
+    // works.
+    const unclaimed = projects.find(
+      (project) => project.gameId === Number(gameId) && project.placeIds.length === 0,
+    );
+
+    if (unclaimed) return unclaimed;
   }
 
   return null;

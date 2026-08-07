@@ -219,6 +219,13 @@ export const COMMANDS = {
   commands: { local: "commands", group: "Info", summary: "Machine-readable command registry" },
   verse: { local: "verse", group: "Deen", summary: "Today's verse" },
   help: { local: "help", group: "Info", summary: "Show this help" },
+  agents: {
+    local: "agents",
+    group: "Info",
+    summary: "Print the agent brief, or install it into a project's AGENTS.md",
+    flags: { install: "add or refresh the MuslimSync section in <dir>/AGENTS.md (default .)" },
+    examples: ["msync agents", "msync agents --install", "msync agents --install ~/projects/MyGame"],
+  },
 };
 
 /** Groups, in the order help should print them. */

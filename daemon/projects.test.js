@@ -143,17 +143,24 @@ test("a missing root lists nothing instead of throwing", () => {
 
 // ------------------------------------------------------------- identity
 
-test("matches a project by placeId, then gameId", () => {
+test("matches a project by placeId, then by an unclaimed game", () => {
   const projects = [
     { name: "a", gameId: 1, placeIds: [10], argonId: null },
     { name: "b", gameId: 2, placeIds: [20], argonId: null },
+    { name: "c", gameId: 3, placeIds: [], argonId: null },
   ];
 
   assert.equal(findByIdentity(projects, { placeId: 20 }).name, "b");
-  assert.equal(findByIdentity(projects, { gameId: 1 }).name, "a");
   // placeId wins when both are supplied and disagree.
   assert.equal(findByIdentity(projects, { placeId: 10, gameId: 2 }).name, "a");
   assert.equal(findByIdentity(projects, { placeId: 99 }), null);
+
+  // A game whose project has already claimed a place does not match: that
+  // project belongs to place 10, and this is some other place in the universe.
+  assert.equal(findByIdentity(projects, { gameId: 1 }), null);
+
+  // A project that has claimed nothing yet is still up for grabs.
+  assert.equal(findByIdentity(projects, { gameId: 3 }).name, "c");
 });
 
 test("an unpublished place matches only on its argonId", () => {
@@ -314,4 +321,35 @@ test("a folder that merely contains projects stays the root", () => {
   makeProject(path.join(root, "b"));
 
   assert.equal(rootFor(root), root);
+});
+
+// ------------------------------------------- one project per place, not per game
+
+test("a second place in the same universe is not adopted into the first's project", () => {
+  // A universe holds many places and each is its own project. Matching on
+  // gameId alone synced two different places into one folder.
+  makeProject(path.join(root, "lobby"), { name: "Lobby", gameId: 500, placeIds: [11] });
+
+  const projects = list(root);
+  const found = findByIdentity(projects, { gameId: 500, placeId: 22 });
+
+  assert.equal(found, null, "place 22 must get its own project, not the one for place 11");
+});
+
+test("a project that has not claimed a place yet still matches on game", () => {
+  // Create-then-claim: the project exists for the game before its first place
+  // has checked in, and that place must find it.
+  makeProject(path.join(root, "fresh"), { name: "Fresh", gameId: 501 });
+
+  const found = findByIdentity(list(root), { gameId: 501, placeId: 33 });
+
+  assert.equal(found?.name, "Fresh");
+});
+
+test("a place always matches its own project, whatever the game says", () => {
+  makeProject(path.join(root, "a"), { name: "A", gameId: 600, placeIds: [1] });
+  makeProject(path.join(root, "b"), { name: "B", gameId: 600, placeIds: [2] });
+
+  assert.equal(findByIdentity(list(root), { gameId: 600, placeId: 2 })?.name, "B");
+  assert.equal(findByIdentity(list(root), { gameId: 600, placeId: 1 })?.name, "A");
 });

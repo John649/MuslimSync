@@ -10,9 +10,12 @@
 
 import { encode, decode } from "@msgpack/msgpack";
 import { spawnSync } from "node:child_process";
+import { writeFileSync } from "node:fs";
+import path from "node:path";
 
 import * as projects from "./projects.js";
 import { universeName, suggestName, suggestFolder } from "./universe.js";
+import { renderSection } from "../cli/agents.js";
 import { vendoredArgon } from "./argon.js";
 
 // Must exceed a base64-encoded artifact chunk, which inflates by 4/3, plus the
@@ -195,6 +198,17 @@ function scaffold(projectPath) {
 
   if (result.status !== 0) {
     throw new HttpError(500, `argon init failed: ${(result.stderr || result.stdout || "").trim().slice(0, 300)}`);
+  }
+
+  // A new project gets the agent brief without anyone remembering to ask.
+  // An agent working in a game repository has no reason to know this tool
+  // exists — `gh` is recognised because it is in the training data, and
+  // nothing here is.
+  try {
+    writeFileSync(path.join(projectPath, "AGENTS.md"), renderSection());
+  } catch {
+    // A project without the brief is a project that still works. Failing the
+    // create over a documentation file would be the wrong trade.
   }
 }
 

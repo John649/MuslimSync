@@ -169,6 +169,26 @@ Three kinds of handler:
 
 See [`commands/`](commands) for one of each.
 
+## For coding agents
+
+[`AGENTS.md`](AGENTS.md) is the brief, generated from the same registry the CLI
+dispatches on so the command table cannot drift. `npm run check` fails if the
+committed copy is stale.
+
+An agent working in *your game's* repository has no reason to know this tool
+exists — `gh` gets recognised because it is in the training data, and nothing
+here is. So the brief travels to the project:
+
+```bash
+msync agents                      # print it
+msync agents --install            # add or refresh the section in ./AGENTS.md
+msync agents --install ~/MyGame   # or somewhere else
+```
+
+Projects MuslimSync creates get it automatically. Installing is idempotent and
+only ever touches the block between its own markers, so the rest of a project's
+AGENTS.md is left alone.
+
 ## Development
 
 ```bash

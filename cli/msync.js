@@ -13,6 +13,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { discover, bindArgs, run as runCommand } from "../daemon/commands.js";
 import { runTest, formatVerdict, TestFailure } from "./playtest.js";
+import { renderAgentsMd, mergeInto } from "./agents.js";
 
 const APP_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -71,6 +72,35 @@ async function local(name, { flags, positionals = [], port }) {
 
     case "commands":
       return { json: registry() };
+
+    case "agents": {
+      // Printed as well as committed: an agent pointed at a machine, rather
+      // than at the repo, still has a way to ask what this tool can do.
+      if (!flags.install) return { text: renderAgentsMd(), json: { markdown: renderAgentsMd() } };
+
+      // A game's repository is where an agent actually works, and it has no
+      // reason to know this tool exists. `gh` is recognised because it is in
+      // the training data; nothing here is.
+      const target = path.resolve(typeof flags.install === "string" ? flags.install : ".", "AGENTS.md");
+
+      let before = "";
+      try {
+        before = readFileSync(target, "utf8");
+      } catch {
+        // A project with no AGENTS.md yet is the common case, not an error.
+      }
+
+      const after = mergeInto(before);
+
+      if (after === before) return { text: `${target} is already up to date`, json: { path: target, changed: false } };
+
+      writeFileSync(target, after);
+
+      return {
+        text: `${before ? "updated" : "wrote"} ${target}`,
+        json: { path: target, changed: true, created: !before },
+      };
+    }
 
     case "status": {
       const response = await fetch(`http://127.0.0.1:${port}/health`).catch(() => null);

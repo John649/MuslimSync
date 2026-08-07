@@ -14,11 +14,12 @@
     "lint:plugin": "cd plugin && selene src/ && stylua --check src/",
     "build:plugin": "node scripts/build-plugin.mjs",
     "build:quran": "node quran/build-dataset.mjs",
-    "check": "npm run test && npm run lint:plugin && node scripts/check-file-size.mjs",
+    "check": "npm run test && npm run lint:plugin && node scripts/check-file-size.mjs && node scripts/check-agents.mjs",
     "dev:plugin": "node scripts/build-plugin.mjs --watch --install",
     "make:icons": "node scripts/make-icons.mjs",
     "make:app": "node scripts/make-app.mjs",
-    "start:dev": "electron ."
+    "start:dev": "electron .",
+    "gen:agents": "node scripts/make-agents.mjs"
   },
   "devDependencies": {
     "electron": "^33.0.0"
