@@ -32,8 +32,8 @@ local Toolbar = require(Components.Plugin.Toolbar)
 local ToolbarButton = require(Components.Plugin.ToolbarButton)
 local Widget = require(Components.Plugin.Widget)
 local Container = require(Components.Container)
+local Wordmark = require(Components.Wordmark)
 local Padding = require(Components.Padding)
-local Image = require(Components.Image)
 local Text = require(Components.Text)
 local List = require(Components.List)
 
@@ -92,7 +92,7 @@ function App.new()
 	-- Minimum widget size - the picker, details and create pages need
 	-- vertical room, so don't let the panel collapse below usability
 	self.rootSize = Value(Vector2.new(320, 400))
-	self.icon = Value(Assets.MuslimSync.Logo)
+	self.icon = Value(Assets.Brand.Logo)
 	self.pages = Value({})
 
 	self.settingsWidget = Value(nil)
@@ -103,7 +103,7 @@ function App.new()
 
 	local toolbarButton = ToolbarButton {
 		Toolbar = Toolbar {
-			Name = "Dervex Tools",
+			Name = "MuslimSync",
 		},
 		Name = "MuslimSync",
 		ToolTip = "Open MuslimSync UI",
@@ -147,13 +147,13 @@ end
 
 function App:setIcon(icon: ("Ok" | "Warn" | "Error")?)
 	if icon == "Ok" then
-		self.icon:set(Assets.MuslimSync.LogoOk)
+		self.icon:set(Assets.Brand.LogoOk)
 	elseif icon == "Warn" then
-		self.icon:set(Assets.MuslimSync.LogoWarn)
+		self.icon:set(Assets.Brand.LogoWarn)
 	elseif icon == "Error" then
-		self.icon:set(Assets.MuslimSync.LogoError)
+		self.icon:set(Assets.Brand.LogoError)
 	else
-		self.icon:set(Assets.MuslimSync.Logo)
+		self.icon:set(Assets.Brand.Logo)
 	end
 end
 
@@ -196,11 +196,7 @@ function App:setPage(page, fill)
 				Container {
 					Size = UDim2.fromScale(1, 0),
 					[Children] = {
-						Image {
-							Size = UDim2.fromOffset(155, 35),
-							Image = Assets.MuslimSync.Banner,
-							ImageColor3 = Theme.Colors.Brand,
-						},
+						Wordmark {},
 						Text {
 							AnchorPoint = Vector2.new(1, 1),
 							Position = UDim2.new(1, -3, 1, 0),

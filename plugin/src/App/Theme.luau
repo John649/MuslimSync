@@ -19,8 +19,9 @@ local function getColors(isDark: boolean): { [string]: { Color3 | { [string]: Co
 	border = Color3.fromHSV(h, s, v * (isDark and 1.2 or 0.85))
 
 	return {
-		-- It's actually 130, 120, 230
-		Brand = Color3.fromRGB(120, 110, 220),
+		-- Matches --accent in the desktop app's stylesheet (#3ba55d), so the
+		-- widget and the app read as one product.
+		Brand = Color3.fromRGB(59, 165, 93),
 
 		Background = background,
 		ActiveBackground = Studio.Theme:GetColor(Enum.StudioStyleGuideColor.Titlebar),
@@ -62,25 +63,30 @@ local Theme = {
 		},
 	},
 
+	-- BuilderSans is Studio's own modern UI face and the closest available
+	-- match to the app's sans stack. Ubuntu was Argon's choice and reads
+	-- noticeably rounder than the desktop shell.
 	Fonts = {
-		Regular = Font.fromName("Ubuntu"),
-		Bold = Font.fromName("Ubuntu", Enum.FontWeight.Bold),
-		Italic = Font.fromName("Ubuntu", Enum.FontWeight.Regular, Enum.FontStyle.Italic),
+		Regular = Font.fromName("BuilderSans"),
+		Bold = Font.fromName("BuilderSans", Enum.FontWeight.Bold),
+		Italic = Font.fromName("BuilderSans", Enum.FontWeight.Regular, Enum.FontStyle.Italic),
 		Mono = Font.fromName("RobotoMono"),
 		MonoBold = Font.fromName("RobotoMono", Enum.FontWeight.Bold),
 
-		-- required for TextService:GetTextSize()
+		-- required for TextService:GetTextSize(), which predates Font objects
+		-- and still takes the legacy enum. BuilderSans has no enum member, so
+		-- measurement falls back to Gotham, its nearest metric match.
 		Enums = {
-			Regular = Enum.Font.Ubuntu,
-			Bold = Enum.Font.Ubuntu,
-			Italic = Enum.Font.Ubuntu,
+			Regular = Enum.Font.Gotham,
+			Bold = Enum.Font.GothamBold,
+			Italic = Enum.Font.Gotham,
 			Mono = Enum.Font.RobotoMono,
 			MonoBold = Enum.Font.RobotoMono,
 		},
 	},
 
 	BorderThickness = 1,
-	CornerRadius = 6,
+	CornerRadius = 8,
 	ListSpacing = 12,
 	WidgetPadding = 16,
 	Padding = 8,
@@ -130,13 +136,6 @@ do
 		connection:Disconnect()
 		connection = nil
 	end)
-
-	-- :P
-	local now = DateTime.now():ToLocalTime()
-	if now.Month == 4 and now.Day == 1 then
-		Theme.Colors.Brand = Color3.fromHex("e13835")
-		Theme.CornerRadius = 0
-	end
 end
 
 return Theme

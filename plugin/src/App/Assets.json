@@ -1,6 +1,6 @@
 {
-  "MuslimSync": {
-    "Banner": "rbxassetid://16996859431",
+  "_note": "Toolbar and status icons are still Argon's uploaded artwork, inherited by the fork. They are NOT ours to ship under the MuslimSync name and must be replaced with our own uploads before any release. The banner was removed - App/Components/Wordmark.luau draws it instead.",
+  "Brand": {
     "Logo": "rbxassetid://16940983037",
     "LogoOk": "rbxassetid://17419316559",
     "LogoWarn": "rbxassetid://17419316412",
