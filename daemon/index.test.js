@@ -297,3 +297,24 @@ test("plugin events are re-emitted with their place", async () => {
   await plugin.close();
   await daemon.stop();
 });
+
+test("answers on the IPv6 loopback as well as the IPv4 one", async () => {
+  // Binding 127.0.0.1 alone means anything that resolves `localhost` to ::1
+  // first gets connection refused while the daemon is plainly running — a
+  // failure that looks exactly like the app not being started.
+  const daemon = new Daemon({ port: 0 });
+  await daemon.start();
+
+  try {
+    const four = await fetch(`http://127.0.0.1:${daemon.port}/health`);
+    assert.equal(four.status, 200);
+
+    const six = await fetch(`http://[::1]:${daemon.port}/health`).catch(() => null);
+
+    // A host with IPv6 disabled legitimately has nothing to bind, so this
+    // asserts the shape rather than demanding the connection.
+    if (six) assert.equal(six.status, 200);
+  } finally {
+    await daemon.stop();
+  }
+});

@@ -23,6 +23,7 @@ export class Daemon extends EventEmitter {
   #server;
   #wss;
   #sessions = new Map();
+  #ipv6 = null;
   #nextSessionId = 1;
   // The cross-project clipboard. A copy in one place has to be pasteable in
   // another without the caller carrying an artifact id around by hand — that
@@ -97,8 +98,49 @@ export class Daemon extends EventEmitter {
         // Port 0 asks the OS to pick one, so read back what we actually got.
         // Callers and the plugin both need the real number.
         this.port = this.#server.address().port;
-        this.emit("change", this.status());
-        resolve(this.status());
+
+        // Also answer on the IPv6 loopback. Binding 127.0.0.1 alone means
+        // anything that resolves `localhost` to ::1 first — which some tools
+        // and some shells do — gets connection refused while the daemon is
+        // plainly running. Loopback either way, so nothing new is exposed.
+        this.#listenOnIpv6Loopback().finally(() => {
+          this.emit("change", this.status());
+          resolve(this.status());
+        });
+      });
+    });
+  }
+
+  /**
+   * Second listener on ::1, sharing the same handlers.
+   *
+   * Best effort: a host with IPv6 disabled has nothing to bind, and that is not
+   * a reason to refuse to start.
+   */
+  #listenOnIpv6Loopback() {
+    return new Promise((resolve) => {
+      const server = createServer((request, response) => this.#handleHttp(request, response));
+
+      server.once("error", () => {
+        server.close();
+        resolve();
+      });
+
+      server.listen(this.port, "::1", () => {
+        this.#ipv6 = server;
+        // The websocket server attaches to the upgrade event, so the second
+        // listener needs its own hand-off to the same pool.
+        server.on("upgrade", (request, socket, head) => {
+          // The IPv4 listener gets path filtering from the WebSocketServer's
+          // own `path` option; this one has to do it by hand.
+          if (new URL(request.url, "http://localhost").pathname !== "/control") {
+            socket.destroy();
+            return;
+          }
+
+          this.#wss.handleUpgrade(request, socket, head, (ws) => this.#wss.emit("connection", ws, request));
+        });
+        resolve();
       });
     });
   }
@@ -109,6 +151,8 @@ export class Daemon extends EventEmitter {
 
     this.#wss?.clients.forEach((socket) => socket.terminate());
     await new Promise((resolve) => (this.#wss ? this.#wss.close(resolve) : resolve()));
+    await new Promise((resolve) => (this.#ipv6 ? this.#ipv6.close(resolve) : resolve()));
+    this.#ipv6 = null;
     await new Promise((resolve) => (this.#server ? this.#server.close(resolve) : resolve()));
 
     this.#server = undefined;
