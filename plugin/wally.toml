@@ -1,0 +1,19 @@
+[package]
+name = "muslimsync/muslimsync"
+authors = ["MuslimSync", "Dervex (Argon)"]
+description = "Roblox Studio sync, control, and agent tooling"
+registry = "https://github.com/UpliftGames/wally-index"
+license = "Apache-2.0"
+# DO NOT bump this to a MuslimSync product version. Core/init.luau:230 refuses
+# to sync unless SemVer major.minor matches the Argon server it dials, so this
+# field tracks the vendored argon binary (2.0.28). Product version lives in
+# src/Version.luau.
+version = "2.0.28"
+realm = "shared"
+private = true
+
+[dependencies]
+Fusion = "dervexhero/fusion-03-dev@0.3.0-dev.1"
+Signal = "dervexhero/advancedsignal@1.0.1"
+Promise = "lukadev-0/typed-promise@4.0.2"
+Highlighter = "boatbomber/highlighter@0.9.0"

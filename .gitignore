@@ -1,0 +1,12 @@
+.DS_Store
+node_modules/
+plugin/sourcemap.json
+plugin/*.lock
+plugin/src/AuthToken.luau
+dist/
+*.rbxm
+*.rbxl
+*.rbxlx
+
+# Vendored argon binaries are large; keep the one we ship for this platform.
+!vendor/argon/**

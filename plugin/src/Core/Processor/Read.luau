@@ -1,0 +1,259 @@
+local MuslimSync = script:FindFirstAncestor("MuslimSync")
+
+local Dom = require(MuslimSync.Lib.Dom)
+
+local Types = require(MuslimSync.Types)
+local Log = require(MuslimSync.Log)
+local Config = require(MuslimSync.Config)
+
+local equals = require(MuslimSync.Helpers.equals)
+local generateRef = require(MuslimSync.Helpers.generateRef)
+
+local Snapshot = require(script.Parent.Parent.Snapshot)
+local Error = require(script.Parent.Parent.Error)
+
+local function isScriptRelated(instance: Instance): boolean
+	return instance:IsA("LuaSourceContainer") or instance:FindFirstChildWhichIsA("LuaSourceContainer", true) ~= nil
+end
+
+local function validateValue(value: any, propertyType: string?): boolean
+	if propertyType == "BinaryString" then
+		return true
+	end
+
+	local valueType = type(value)
+
+	if valueType == "string" then
+		return utf8.len(value) ~= nil
+	end
+
+	if valueType == "table" then
+		for k, v in value do
+			if not validateValue(k) or not validateValue(v) then
+				return false
+			end
+		end
+	end
+
+	return true
+end
+
+local ReadProcessor = {}
+ReadProcessor.__index = ReadProcessor
+
+function ReadProcessor.new(tree)
+	return setmetatable({
+		tree = tree,
+	}, ReadProcessor)
+end
+
+function ReadProcessor:onAdd(instance: Instance, __parentId: Types.Ref?): Types.AddedSnapshot?
+	Log.trace("Detected addition of", instance)
+
+	if self.tree:getId(instance) then
+		Log.trace("Instance already tracked. Skipping..")
+		return nil
+	end
+
+	if not isScriptRelated(instance) and Config:get("OnlyCodeMode") then
+		Log.trace("Instance is not script related (Only Code Mode). Skipping..")
+		return nil
+	end
+
+	local parentId = __parentId or self.tree:getId(instance.Parent)
+
+	if not parentId then
+		Log.trace("Unknown instance. Skipping..")
+		return nil
+	end
+
+	local id = generateRef()
+	local properties = {}
+	local children = {}
+
+	if self.shouldSyncProperties(instance) then
+		for property, default in Dom.getDefaultProperties(instance.ClassName) do
+			local readSuccess, instanceValue = Dom.readProperty(instance, property)
+
+			if not readSuccess then
+				local err = Error.new(Error.ReadFailed, property, instance, instanceValue.kind)
+				Log.warn(err)
+
+				continue
+			end
+
+			local _, defaultValue = Dom.EncodedValue.decode(default)
+
+			if not equals(instanceValue, defaultValue) then
+				local propertyType = next(default)
+
+				if not validateValue(instanceValue, propertyType) then
+					local err = Error.new(Error.ValidationFailed, property, instance, instanceValue)
+					Log.warn(err)
+
+					continue
+				end
+
+				local encodeSuccess, encodedValue = Dom.EncodedValue.encode(instanceValue, propertyType)
+
+				if not encodeSuccess then
+					local err = Error.new(Error.EncodeFailed, property, instanceValue)
+					Log.warn(err)
+
+					continue
+				end
+
+				properties[property] = encodedValue
+			end
+		end
+	end
+
+	for _, child in instance:GetChildren() do
+		local snapshot = self:onAdd(child, id)
+
+		if snapshot then
+			table.insert(children, snapshot)
+		end
+	end
+
+	local snapshot = Snapshot.new(id)
+		:withName(instance.Name)
+		:withClass(instance.ClassName)
+		:withProperties(properties)
+		:withChildren(children)
+
+	self.tree:insertInstance(instance, id, snapshot.meta)
+
+	if __parentId then
+		return snapshot
+	end
+
+	if parentId then
+		snapshot.parent = parentId
+	else
+		local currentInstance = instance
+		local currentSnapshot = nil
+		local rootId = nil
+
+		repeat
+			parentId = generateRef()
+			currentInstance = currentInstance.Parent
+			rootId = self.tree:getId(currentInstance)
+
+			if rootId then
+				break
+			end
+
+			-- In theory this should never happen
+			if currentInstance == game then
+				Log.warn("Failed to find root instance for", instance)
+				return nil
+			end
+
+			currentSnapshot = Snapshot.new(parentId)
+				:withName(currentInstance.Name)
+				:withClass(currentInstance.ClassName)
+				:withChildren({ snapshot })
+
+			self.tree:insertInstance(currentInstance, parentId, currentSnapshot.meta)
+		until rootId
+
+		currentSnapshot.parent = rootId
+		snapshot = currentSnapshot
+	end
+
+	return snapshot
+end
+
+function ReadProcessor:onChange(instance: Instance, property: string?): Types.UpdatedSnapshot?
+	Log.trace("Detected change of", instance, property)
+
+	local id = self.tree:getId(instance)
+
+	if not id then
+		Log.trace("Unknown instance. Skipping..")
+		return nil
+	end
+
+	if not isScriptRelated(instance) and Config:get("OnlyCodeMode") then
+		Log.trace("Instance is not script related (Only Code Mode). Skipping..")
+		return nil
+	end
+
+	if property and not self.shouldSyncProperties(instance, property) then
+		Log.trace("Instance does not pass sync filter. Skipping..")
+		return nil
+	end
+
+	if property == "Name" then
+		return Snapshot.newUpdated(id):withName(instance.Name)
+	end
+
+	local properties = {}
+
+	for property, default in Dom.getDefaultProperties(instance.ClassName) do
+		local readSuccess, instanceValue = Dom.readProperty(instance, property)
+
+		if not readSuccess then
+			local err = Error.new(Error.ReadFailed, property, instance, instanceValue.kind)
+			Log.warn(err)
+
+			continue
+		end
+
+		local _, defaultValue = Dom.EncodedValue.decode(default)
+
+		if not equals(instanceValue, defaultValue) then
+			local propertyType = next(default)
+
+			if not validateValue(instanceValue, propertyType) then
+				local err = Error.new(Error.ValidationFailed, property, instance, instanceValue)
+				Log.warn(err)
+
+				continue
+			end
+
+			local encodeSuccess, encodedValue = Dom.EncodedValue.encode(instanceValue, propertyType)
+
+			if not encodeSuccess then
+				local err = Error.new(Error.EncodeFailed, property, instanceValue)
+				Log.warn(err)
+
+				continue
+			end
+
+			properties[property] = encodedValue
+		end
+	end
+
+	return Snapshot.newUpdated(id):withProperties(properties)
+end
+
+function ReadProcessor:onRemove(instance: Instance): Types.Ref?
+	Log.trace("Detected removal of", instance)
+
+	local id = self.tree:getId(instance)
+
+	if not id then
+		Log.trace("Unknown instance. Skipping..")
+		return nil
+	end
+
+	self.tree:removeById(id)
+
+	return id
+end
+
+function ReadProcessor.shouldSyncProperties(instance: Instance, property: string?): boolean
+	if instance:IsA("LuaSourceContainer") or property == "Name" then
+		return true
+	end
+
+	if property and not Dom.getDefaultProperties(instance.ClassName)[property] then
+		return false
+	end
+
+	return Config:get("SyncbackProperties")
+end
+
+return ReadProcessor

@@ -1,0 +1,26 @@
+{
+  "name": "muslimsync",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Roblox Studio sync, control, and agent tooling. Argon syncs; MuslimSync drives.",
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "msync": "./cli/msync.js"
+  },
+  "scripts": {
+    "start": "electron .",
+    "daemon": "node daemon/index.js",
+    "test": "node --test \"**/*.test.js\"",
+    "lint:plugin": "cd plugin && selene src/ && stylua --check src/",
+    "build:plugin": "node scripts/build-plugin.mjs",
+    "build:quran": "node quran/build-dataset.mjs",
+    "check": "npm run test && npm run lint:plugin && node scripts/check-file-size.mjs"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0"
+  },
+  "main": "app/main.js"
+}

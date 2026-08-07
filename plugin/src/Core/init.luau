@@ -1,0 +1,468 @@
+local ScriptEditorService = game:GetService("ScriptEditorService")
+
+local MuslimSync = script:FindFirstAncestor("MuslimSync")
+
+local Promise = require(MuslimSync.Packages.Promise)
+local Signal = require(MuslimSync.Packages.Signal)
+
+local Client = require(MuslimSync.Client)
+local Config = require(MuslimSync.Config)
+local Log = require(MuslimSync.Log)
+local Util = require(MuslimSync.Util)
+local Types = require(MuslimSync.Types)
+local Watcher = require(MuslimSync.Watcher)
+local Executor = require(MuslimSync.Executor)
+local SemVer = require(MuslimSync.SemVer)
+local manifest = require(MuslimSync.manifest)
+local equals = require(MuslimSync.Helpers.equals)
+
+local Processor = require(script.Processor)
+local Changes = require(script.Changes)
+local Tree = require(script.Tree)
+local Error = require(script.Error)
+
+local SYNCBACK_RATE = 0.5
+local SYNCBACK_DEBOUNCE = 0.1
+
+local Core = {
+	Status = {
+		Disconnected = 0,
+		Connecting = 1,
+		Connected = 2,
+		Disconnecting = 3,
+	},
+}
+Core.__index = Core
+
+function Core.new(host: string?, port: string?)
+	local self = setmetatable({}, Core)
+
+	self.project = nil
+	self.rootInstances = {}
+	self.connections = {}
+	self.status = 0
+	self.lastSync = os.clock()
+
+	self.tree = Tree.new()
+	self.client = Client.new(host or Config:get("Host"), port or Config:get("Port"), Config:get("Https"))
+	self.processor = Processor.new(self.tree, self.client)
+	self.watcher = Watcher.new()
+	self.executor = Executor.new()
+
+	self.__prompt = function(_message: string, _changes: Types.Changes?, _tree: any): boolean
+		return true
+	end
+	self.__ready = function(_project: Types.Project) end
+	self.__sync = function(_kind: Types.MessageKind, _data: any) end
+
+	self:__handleOpenInEditor(Config:get("OpenInEditor"))
+
+	-- Watch for `OpenInEditor setting
+	table.insert(
+		self.connections,
+		Config:onChanged("OpenInEditor", function(enabled)
+			self:__handleOpenInEditor(enabled)
+		end)
+	)
+
+	-- Watch for `TwoWaySync` setting
+	table.insert(
+		self.connections,
+		Config:onChanged("TwoWaySync", function(enabled)
+			if enabled then
+				self.watcher:start(self.rootInstances)
+			else
+				self.watcher:stop()
+			end
+		end)
+	)
+
+	return self
+end
+
+function Core:run(): Promise.Promise
+	return Promise.new(function(_, reject)
+		self.status = Core.Status.Connecting
+
+		local initialSyncPriority = Config:get("InitialSyncPriority")
+
+		Log.trace("Fetching server details..")
+
+		local project = self.client:fetchDetails():expect()
+		self.project = project
+
+		Config.applyServerConfig(project.gameConfig, project.placeConfig)
+
+		self:__verifyProject(project, true):expect()
+
+		Log.trace("Subscribing to the server queue..")
+
+		self.client:subscribe():expect()
+
+		Log.trace("Getting initial snapshot..")
+
+		local snapshot = self.client:getSnapshot():expect()
+
+		Log.trace("Initializing processor..")
+
+		local changes = self.processor:init(snapshot, initialSyncPriority)
+
+		if self.status ~= Core.Status.Connecting then
+			return reject(Error.new(Error.Terminated))
+		end
+
+		for i, id in project.rootRefs do
+			self.rootInstances[i] = self.tree:getInstance(id)
+		end
+
+		if initialSyncPriority ~= "None" then
+			Log.trace("Processing initial snapshot..")
+
+			if initialSyncPriority == "Server" then
+				self:__verifyChanges(changes, true):expect()
+				self.processor.write:applyChanges(changes, true)
+			elseif changes:total() > 0 then
+				local reversed = self.processor:reverseChanges(changes)
+				self.client:write(reversed):expect()
+			end
+		end
+
+		if Config:get("TwoWaySync") then
+			self.watcher:start(self.rootInstances)
+		end
+
+		self.status = Core.Status.Connected
+		Config.setClient(self.client)
+		self.__ready(project)
+
+		Log.trace("Starting sync loops..")
+
+		self:__startSyncbackLoop():catch(function(err)
+			return reject(err)
+		end)
+
+		return self:__startSyncLoop():expect()
+	end)
+end
+
+function Core:stop()
+	Log.trace("Stopping MuslimSync core..")
+
+	self.status = Core.Status.Disconnecting
+
+	Config.setClient(nil)
+
+	if self.__stream then
+		self.__stream.close()
+		self.__stream = nil
+	end
+
+	self.watcher:stop()
+
+	if self.client.isSubscribed then
+		task.spawn(function()
+			self.client:unsubscribe():catch(function(err)
+				Log.debug("Failed to unsubscribe from the server", err)
+			end)
+		end)
+	end
+
+	Util.clean(self.connections)
+end
+
+function Core:onPrompt(callback: (message: string, changes: Types.Changes?, tree: any) -> boolean)
+	self.__prompt = function(message, changes)
+		if self.status == Core.Status.Disconnecting then
+			return false
+		end
+
+		return callback(message, changes, self.tree)
+	end
+end
+
+function Core:onReady(callback: (project: Types.Project) -> ())
+	self.__ready = function(project)
+		if self.status == Core.Status.Disconnecting then
+			return
+		end
+
+		return callback(project)
+	end
+end
+
+function Core:onSync(callback: (kind: Types.MessageKind, data: any) -> ())
+	self.__sync = function(kind, data)
+		if self.status == Core.Status.Disconnecting then
+			return
+		end
+
+		return callback(kind, data)
+	end
+end
+
+function Core.wasExitGraceful(err: Error.Error)
+	return err == Error.GameId or err == Error.PlaceIds or err == Error.TooManyChanges or err == Error.Terminated
+end
+
+-- Internal functions
+
+function Core:__verifyProject(project: Types.Project, initial: boolean?): Promise.Promise
+	if not self:__shouldPrompt(initial) then
+		return Promise.resolve()
+	end
+
+	if project.gameId and project.gameId ~= game.GameId then
+		local err = Error.new(Error.GameId, game.GameId, project.gameId)
+
+		if not self.__prompt(err.message) then
+			return Promise.reject(err)
+		end
+	end
+
+	if #project.placeIds > 0 and not table.find(project.placeIds, game.PlaceId) then
+		local err = Error.new(Error.PlaceIds, game.PlaceId, project.placeIds)
+
+		if not self.__prompt(err.message) then
+			return Promise.reject(err)
+		end
+	end
+
+	if not SemVer.parse(project.version):isCompatible(SemVer.parse(manifest.package.version)) then
+		local err = Error.new(Error.Version, manifest.package.version, project.version)
+
+		return Promise.reject(err)
+	end
+
+	return Promise.resolve()
+end
+
+function Core:__verifyChanges(changes: Types.Changes, initial: boolean?): Promise.Promise
+	if not self:__shouldPrompt(initial) then
+		return Promise.resolve()
+	end
+
+	if Changes.Total(changes) > Config:get("ChangesThreshold") then
+		local err = Error.new(Error.TooManyChanges, #changes.additions, #changes.updates, #changes.removals)
+
+		if not self.__prompt(err.message, changes) then
+			return Promise.reject(err)
+		end
+	end
+
+	return Promise.resolve()
+end
+
+function Core:__startSyncLoop()
+	return Promise.new(function(resolve, reject)
+		-- Prefer a WebSocket push stream; degrade to /read long polling
+		-- when the API is unavailable or the stream drops mid-session
+		local buffer: { Types.Message } = {}
+		local signal = Signal.new()
+		local streamClosed = false
+
+		self.__stream = self.client:openStream(function(message)
+			table.insert(buffer, message)
+			signal:Fire()
+		end, function()
+			streamClosed = true
+			signal:Fire()
+		end)
+
+		local function nextMessage(): Types.Message?
+			if self.__stream then
+				while #buffer == 0 and not streamClosed and self.status == Core.Status.Connected do
+					signal:Wait()
+				end
+
+				if #buffer > 0 then
+					return table.remove(buffer, 1)
+				end
+
+				if streamClosed and self.status == Core.Status.Connected then
+					Log.warn("Sync stream dropped, falling back to long polling..")
+					self.__stream = nil
+				end
+
+				return nil
+			end
+
+			return self.client:read():expect() :: Types.Message?
+		end
+
+		while self.status == Core.Status.Connected do
+			local message = nextMessage()
+
+			if not message then
+				continue
+			end
+
+			local kind = next(message) :: Types.MessageKind
+			local data = message[kind] :: any
+
+			Log.trace("Received message:", kind)
+
+			if kind == "SyncChanges" then
+				self:__verifyChanges(data):expect()
+
+				self.processor.write:applyChanges(data)
+				self.lastSync = os.clock()
+
+				self.__sync(kind, data)
+			elseif kind == "SyncDetails" then
+				self:__verifyProject(data):expect()
+
+				Config.applyServerConfig(data.gameConfig, data.placeConfig)
+
+				if not equals(self.project.rootRefs, data.rootRefs) then
+					self.rootInstances = {}
+
+					for i, id in data.rootRefs do
+						self.rootInstances[i] = self.tree:getInstance(id)
+					end
+
+					self.watcher:restart(self.rootInstances)
+				end
+
+				self.project = data
+
+				self.__sync(kind, data)
+			elseif kind == "ExecuteCode" then
+				self.executor:execute(data.code)
+			elseif kind == "Disconnect" then
+				reject(Error.new(Error.Disconnected, data.message))
+			else
+				local err = Error.new(Error.UnknownEvent, kind, data)
+				Log.warn(err)
+			end
+		end
+
+		resolve()
+	end)
+end
+
+function Core:__startSyncbackLoop()
+	local aggregateChanges = Changes.new()
+
+	return Promise.new(function(resolve)
+		task.spawn(function()
+			while self.status == Core.Status.Connected do
+				task.wait(SYNCBACK_RATE)
+
+				if aggregateChanges:isEmpty() then
+					continue
+				end
+
+				local changes = aggregateChanges
+				aggregateChanges = Changes.new()
+
+				self.client:write(changes):catch(function(err)
+					Log.warn("Failed to write changes to the server:", err)
+				end)
+
+				self.__sync("SyncbackChanges", changes)
+			end
+		end)
+
+		while self.status == Core.Status.Connected do
+			local event = self.watcher:listen() :: Types.WatcherEvent
+
+			if os.clock() - self.lastSync <= SYNCBACK_DEBOUNCE then
+				continue
+			end
+
+			local kind = event.kind
+			local changes = Changes.new()
+
+			Log.trace("Received event:", kind)
+
+			if kind == "Add" then
+				local snapshot = self.processor.read:onAdd(event.instance)
+
+				if snapshot then
+					changes:add(snapshot)
+				end
+			elseif kind == "Change" then
+				local snapshot = self.processor.read:onChange(event.instance, event.property)
+
+				if snapshot then
+					changes:update(snapshot)
+				end
+			elseif kind == "Remove" then
+				local id = self.processor.read:onRemove(event.instance)
+
+				if id then
+					changes:remove(id)
+				end
+			end
+
+			aggregateChanges:join(changes, true)
+		end
+
+		resolve()
+	end)
+end
+
+function Core:__handleOpenInEditor(enabled: boolean)
+	if not enabled then
+		local connection = self.connections["openInEditor"]
+
+		if connection then
+			connection:Disconnect()
+			self.connections["openInEditor"] = nil
+		end
+
+		return
+	end
+
+	self.connections["openInEditor"] = ScriptEditorService.TextDocumentDidOpen:Connect(function(document)
+		if self.status ~= Core.Status.Connected then
+			return
+		end
+
+		if document:IsCommandBar() then
+			Log.trace("Document is a command bar, ignoring")
+			return
+		end
+
+		local id = self.tree:getId(document:GetScript())
+
+		if not id then
+			Log.trace("Document is not synced by MuslimSync, ignoring")
+			return
+		end
+
+		local line = document:GetSelectionStart()
+
+		self.client
+			:open(id, line)
+			:andThen(function()
+				document:CloseAsync()
+			end)
+			:catch(function(err)
+				Log.debug("Failed to open document in editor:", err)
+			end)
+	end)
+end
+
+function Core:__cleanConnection(id: string)
+	local connection = self.connections[id]
+
+	if connection then
+		connection:Disconnect()
+		self.connections[id] = nil
+	end
+end
+
+function Core:__shouldPrompt(initial: boolean?): boolean
+	local mode = Config:get("DisplayPrompts")
+
+	if mode == "Always" then
+		return true
+	elseif mode == "Initial" and initial then
+		return true
+	else
+		return false
+	end
+end
+
+return Core

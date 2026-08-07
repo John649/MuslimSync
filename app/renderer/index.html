@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:;" />
+    <title>MuslimSync</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <aside class="sidebar">
+      <header class="brand">
+        <span class="mark">م</span>
+        <span class="name">MuslimSync</span>
+      </header>
+
+      <section class="verse" id="verse" aria-live="polite">
+        <p class="verse-arabic" id="verse-arabic" dir="rtl" lang="ar"></p>
+        <p class="verse-translation" id="verse-translation"></p>
+        <footer class="verse-foot">
+          <span class="verse-ref" id="verse-ref"></span>
+          <span class="verse-actions">
+            <button id="verse-draw" title="Another verse" aria-label="Another verse">&#8635;</button>
+            <button id="verse-copy" title="Copy" aria-label="Copy verse">&#8690;</button>
+          </span>
+        </footer>
+      </section>
+
+      <nav class="nav">
+        <button class="nav-item is-active" data-view="projects">Projects</button>
+        <button class="nav-item" data-view="commands">Commands</button>
+        <button class="nav-item" data-view="settings">Settings</button>
+      </nav>
+    </aside>
+
+    <main class="content">
+      <section class="view" id="view-projects">
+        <h1>Projects</h1>
+        <p class="empty">No projects yet. Milestone 3 wires this up to the argon serve lifecycle.</p>
+      </section>
+
+      <section class="view is-hidden" id="view-commands">
+        <h1>Commands</h1>
+        <p class="empty">Custom commands appear here once the loader lands (milestone 6).</p>
+      </section>
+
+      <section class="view is-hidden" id="view-settings">
+        <h1>Settings</h1>
+        <div class="setting">
+          <label for="reminder-enabled">Daily verse reminder</label>
+          <input type="checkbox" id="reminder-enabled" />
+        </div>
+        <div class="setting">
+          <label for="reminder-time">Reminder time</label>
+          <input type="time" id="reminder-time" />
+        </div>
+        <div class="setting">
+          <label for="translation">Translation</label>
+          <select id="translation">
+            <option value="khattab">Mustafa Khattab — The Clear Quran</option>
+            <option value="pickthall">Marmaduke Pickthall</option>
+          </select>
+        </div>
+        <div class="setting">
+          <label for="show-arabic">Show Arabic</label>
+          <input type="checkbox" id="show-arabic" />
+        </div>
+      </section>
+    </main>
+
+    <script type="module" src="app.js"></script>
+  </body>
+</html>

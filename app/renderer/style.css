@@ -1,0 +1,197 @@
+:root {
+  --bg: #0f1115;
+  --panel: #161920;
+  --panel-2: #1c2029;
+  --line: #262b36;
+  --text: #e6e9ef;
+  --dim: #9aa3b2;
+  --brand: #4ade80;
+  --brand-dim: #22c55e;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+}
+
+body {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+}
+
+/* ------------------------------------------------------------- sidebar */
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 16px;
+  border-right: 1px solid var(--line);
+  background: var(--panel);
+  overflow-y: auto;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-top: 22px; /* clears the macOS traffic lights */
+}
+
+.mark {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: linear-gradient(140deg, var(--brand), var(--brand-dim));
+  color: #06210f;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.name {
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+/* ---------------------------------------------------------- verse card */
+
+.verse {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: linear-gradient(165deg, var(--panel-2), var(--panel));
+}
+
+.verse-arabic {
+  /* Amiri is not bundled yet; these are the faces that actually ship with
+     macOS and Windows and render Uthmani diacritics correctly. */
+  font-family: "SF Arabic", "Geeza Pro", "Al Bayan", "Traditional Arabic", "Segoe UI", serif;
+  font-size: 21px;
+  line-height: 2.1;
+  text-align: right;
+}
+
+.verse-arabic:empty,
+.verse-arabic.is-hidden {
+  display: none;
+}
+
+.verse-translation {
+  color: var(--text);
+  font-size: 13.5px;
+  line-height: 1.65;
+}
+
+.verse-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 4px;
+  border-top: 1px solid var(--line);
+}
+
+.verse-ref {
+  color: var(--dim);
+  font-size: 12px;
+}
+
+.verse-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.verse-actions button {
+  padding: 2px 7px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dim);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.verse-actions button:hover {
+  background: var(--line);
+  color: var(--text);
+}
+
+/* -------------------------------------------------------------- nav */
+
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: auto;
+}
+
+.nav-item {
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--dim);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.nav-item:hover {
+  background: var(--panel-2);
+  color: var(--text);
+}
+
+.nav-item.is-active {
+  background: var(--panel-2);
+  color: var(--text);
+  box-shadow: inset 2px 0 0 var(--brand);
+}
+
+/* ---------------------------------------------------------- content */
+
+.content {
+  padding: 46px 32px 32px;
+  overflow-y: auto;
+}
+
+.view.is-hidden {
+  display: none;
+}
+
+h1 {
+  margin-bottom: 16px;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.empty {
+  color: var(--dim);
+}
+
+.setting {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 460px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.setting input[type="time"],
+.setting select {
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--panel-2);
+  color: var(--text);
+  font: inherit;
+}

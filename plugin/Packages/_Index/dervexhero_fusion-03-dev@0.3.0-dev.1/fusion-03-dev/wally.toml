@@ -1,0 +1,14 @@
+[package]
+name = "dervexhero/fusion-03-dev"
+description = "Unofficial and temporary port of Fusion 0.3 development to Wally [02/17/2024]. A modern reactive UI library, built specifically for Roblox and Luau."
+license = "MIT"
+authors = ["Elttob"]
+version = "0.3.0-dev.1"
+
+registry = "https://github.com/UpliftGames/wally-index"
+realm = "shared"
+
+exclude = ["**"]
+include = ["src", "src/*", "default.project.json", "wally.lock", "wally.toml"]
+
+[dependencies]
