@@ -12,6 +12,18 @@ npm run build:plugin -- --install   # builds the plugin into Studio's plugins fo
 npm start                           # launches the app, which hosts the daemon
 ```
 
+`npm start` launches through Electron's own bundle, so macOS calls the app
+"Electron" and gives it Electron's icon. For a real Dock entry:
+
+```bash
+npm run make:app     # builds dist/MuslimSync.app
+```
+
+That bundle is a shortcut, not a distributable: it points back at this checkout,
+so editing `app/` takes effect on the next launch with nothing to rebuild.
+Nothing is compiled — it is a folder with a plist in it. Drag it to the Dock or
+to Applications.
+
 Then open a place in Studio. The plugin connects to the daemon on port 7900, and
 `msync` starts answering.
 
@@ -171,6 +183,12 @@ grandfather list. The cap is there to keep a file readable in one sitting.
   it is untested, which is a different thing.
 - Studio does not hot-reload a local plugin. After `build:plugin --install`,
   restart Studio for the new build to load.
+- **A universe's name is not readable from Studio.** Not on the DataModel, not
+  on StudioService, and not in the product info table — so the daemon fetches it
+  from Roblox instead. That works for public universes; a private one returns a
+  placeholder, and the create dialog falls back to the place's own name. It is
+  the one thing that reaches the network, it is skipped entirely for unpublished
+  places, and failing it costs nothing but a less specific default.
 - Every unpublished place reports `placeId 0`, so sessions are keyed by connection
   rather than by place. Several scratch places can be open at once and stay
   distinct.
