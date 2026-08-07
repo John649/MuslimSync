@@ -205,6 +205,22 @@ npm run build:quran    # regenerate quran/quran.json from source
 Files are capped at 400 lines by `scripts/check-file-size.mjs`, with an explicit
 grandfather list. The cap is there to keep a file readable in one sitting.
 
+## Running from a sandboxed shell
+
+Many agent harnesses sandbox outbound networking, and that includes loopback:
+connecting to `127.0.0.1` fails with `EPERM` whatever port you pick. Argon and
+Ro Sync are usable from such a shell because an agent drives them by editing
+files, and their daemons watch the filesystem. MuslimSync's control commands
+had no such path.
+
+So the daemon also listens on a unix socket at `~/.muslimsync/daemon.sock`, and
+`msync` prefers it. A socket is a file, gated by filesystem permissions rather
+than the network stack, so a network sandbox does not touch it. Nothing to
+configure — `msync doctor` says which door answered.
+
+The TCP listener stays: Studio only speaks HTTP and WebSocket, so the plugin
+cannot reach a socket file.
+
 ## Known limits
 
 - **macOS arm64 only.** That is the only Argon binary vendored in `vendor/argon`,

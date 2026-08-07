@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 
 import { verseOfTheDay, poolRefs, resolve, dayNumber } from "../quran/daily.js";
 import { Daemon } from "../daemon/index.js";
+import { socketPath } from "../daemon/socket.js";
 import { ArgonProcesses } from "../daemon/argon.js";
 import { createRoutes } from "../daemon/routes.js";
 import * as projects from "../daemon/projects.js";
@@ -172,6 +173,8 @@ async function startDaemon() {
   try {
     daemon = new Daemon({
       port: controlPort,
+      // A second front door for shells that sandbox loopback networking.
+      socketFile: socketPath(settings.DIR),
       // The plugin's project endpoints. Reading the root per request rather
       // than capturing it means changing it in Settings takes effect at once.
       routes: createRoutes({

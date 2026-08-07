@@ -27,9 +27,13 @@ const PREAMBLE = `# MuslimSync
 Drives a running Roblox Studio from the command line: read and write the live
 DataModel, capture the viewport, and run Luau inside a real playtest.
 
-Requires the MuslimSync app running (it hosts the daemon on port 7900) and a
-Studio place open with the plugin connected. \`msync status\` says whether both
-are true; check it first if anything else fails.
+Requires the MuslimSync app running and a Studio place open with the plugin
+connected. \`msync status\` says whether both are true; \`msync doctor\` says what
+to do when they are not. Check one of them first if anything else fails.
+
+The daemon answers on a unix socket as well as on port 7900, and the CLI
+prefers the socket — so this works from shells that sandbox loopback
+networking, where connecting to 127.0.0.1 fails with EPERM whatever the port.
 `;
 
 const CONVENTIONS = `## Conventions worth knowing

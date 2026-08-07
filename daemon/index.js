@@ -10,6 +10,9 @@
 import { createServer } from "node:http";
 import { EventEmitter } from "node:events";
 import { WebSocketServer } from "ws";
+import { rmSync } from "node:fs";
+
+import { listenOnSocket } from "./socket.js";
 
 import { decodeFrame, DEFAULT_PORT, ERROR, MAX_FRAME_BYTES, PROTOCOL } from "./protocol.js";
 import { Session } from "./session.js";
@@ -24,15 +27,19 @@ export class Daemon extends EventEmitter {
   #wss;
   #sessions = new Map();
   #ipv6 = null;
+  #socket = null;
   #nextSessionId = 1;
   // The cross-project clipboard. A copy in one place has to be pasteable in
   // another without the caller carrying an artifact id around by hand — that
   // is the entire point of calling it a clipboard.
   #clipboard = null;
 
-  constructor({ port = DEFAULT_PORT, host = HOST, routes = {} } = {}) {
+  constructor({ port = DEFAULT_PORT, host = HOST, routes = {}, socketFile = null } = {}) {
     super();
     this.port = port;
+    // Optional second front door: a unix socket, for shells that sandbox
+    // loopback networking. Null means TCP only.
+    this.socketFile = socketFile;
     this.host = host;
     // The plugin's project endpoints. Empty in the headless case, where there
     // is no configured projects root to serve them from.
@@ -58,6 +65,7 @@ export class Daemon extends EventEmitter {
       listening: Boolean(this.#server?.listening),
       port: this.port,
       protocol: PROTOCOL,
+      socket: this.#socket ? this.socketFile : null,
       plugins: this.sessions.map((session) => ({
         session: session.key,
         placeId: session.placeId,
@@ -103,7 +111,7 @@ export class Daemon extends EventEmitter {
         // anything that resolves `localhost` to ::1 first — which some tools
         // and some shells do — gets connection refused while the daemon is
         // plainly running. Loopback either way, so nothing new is exposed.
-        this.#listenOnIpv6Loopback().finally(() => {
+        Promise.all([this.#listenOnIpv6Loopback(), this.#listenOnUnixSocket()]).finally(() => {
           this.emit("change", this.status());
           resolve(this.status());
         });
@@ -145,12 +153,43 @@ export class Daemon extends EventEmitter {
     });
   }
 
+  /**
+   * Serves the same routes on a unix socket, when one was configured.
+   *
+   * A network sandbox blocks loopback TCP but not a file, which is what makes
+   * this the difference between `msync ls` working inside an agent shell and
+   * dying at EPERM.
+   */
+  async #listenOnUnixSocket() {
+    if (!this.socketFile) return;
+
+    this.#socket = await listenOnSocket(
+      this.socketFile,
+      (request, response) => this.#handleHttp(request, response),
+      {
+        onUpgrade: (request, socket, head) => {
+          if (new URL(request.url, "http://localhost").pathname !== "/control") {
+            socket.destroy();
+            return;
+          }
+
+          this.#wss.handleUpgrade(request, socket, head, (ws) => this.#wss.emit("connection", ws, request));
+        },
+      },
+    );
+  }
+
   async stop() {
     for (const session of this.sessions) session.close("the daemon is shutting down");
     this.#sessions.clear();
 
     this.#wss?.clients.forEach((socket) => socket.terminate());
     await new Promise((resolve) => (this.#wss ? this.#wss.close(resolve) : resolve()));
+    await new Promise((resolve) => (this.#socket ? this.#socket.close(resolve) : resolve()));
+    // The file outlives the listener, and a leftover one blocks the next bind.
+    if (this.socketFile) rmSync(this.socketFile, { force: true });
+    this.#socket = null;
+
     await new Promise((resolve) => (this.#ipv6 ? this.#ipv6.close(resolve) : resolve()));
     this.#ipv6 = null;
     await new Promise((resolve) => (this.#server ? this.#server.close(resolve) : resolve()));

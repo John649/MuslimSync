@@ -9,6 +9,7 @@
 // act on is just a different way of being stuck.
 
 import { existsSync, accessSync, constants, readFileSync, statSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { homedir } from "node:os";
 import path from "node:path";
 
@@ -48,20 +49,41 @@ async function checkDaemon(port) {
     return { health: null, result: fail("daemon", `port ${port} answered with something that is not health`) };
   }
 
-  return { health, result: ok("daemon", `listening on ${port}`) };
+  // Which door answered matters now: a sandboxed shell reaches the socket and
+  // not the port, and knowing which one worked is the whole diagnosis.
+  const via = health.socket ? `unix socket (${health.socket})` : `port ${port}`;
+
+  return { health, result: ok("daemon", `answering over ${via}`) };
+}
+
+/** Whether Roblox Studio is running at all. Unknown on platforms without pgrep. */
+function studioIsRunning() {
+  try {
+    execFileSync("pgrep", ["-x", "RobloxStudio"], { stdio: "ignore" });
+    return true;
+  } catch (error) {
+    // pgrep exits 1 when nothing matched, and ENOENT when it does not exist.
+    return error.code === "ENOENT" ? null : false;
+  }
 }
 
 function checkPlugin(health) {
   const plugins = health?.plugins ?? [];
 
   if (!plugins.length) {
-    return [
-      fail(
-        "plugin",
-        "no Studio place is connected",
-        "open a place in Studio; if it is already open, the plugin may not be installed — `npm run build:plugin -- --install` then restart Studio",
-      ),
-    ];
+    const running = studioIsRunning();
+
+    // "The plugin is not installed" and "Studio is not open" and "Studio is
+    // open on the start page" are three different situations with three
+    // different fixes, and one sentence covering all of them helps with none.
+    const fix =
+      running === false
+        ? "Studio is not running — open it, then open a place"
+        : running === true
+          ? "Studio is running but no place is open; the plugin needs a DataModel to attach to. Open a place — if one is already open, the plugin may not be installed: `npm run build:plugin -- --install`, then restart Studio"
+          : "open a place in Studio; if one is already open, the plugin may not be installed — `npm run build:plugin -- --install` then restart Studio";
+
+    return [fail("plugin", "no Studio place is connected", fix)];
   }
 
   const results = plugins.map((plugin) => {

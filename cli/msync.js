@@ -15,6 +15,7 @@ import { discover, bindArgs, run as runCommand } from "../daemon/commands.js";
 import { runTest, formatVerdict, TestFailure } from "./playtest.js";
 import { local } from "./local.js";
 import { explainUnreachable } from "./reach.js";
+import { send } from "./transport.js";
 import { waitForContext } from "./playtest.js";
 
 const APP_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -40,7 +41,9 @@ async function daemon(port, route, body) {
   let response;
 
   try {
-    response = await fetch(`http://127.0.0.1:${port}${route}`, {
+    response = await send({
+      port,
+      route,
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
@@ -52,7 +55,12 @@ async function daemon(port, route, body) {
     throw new Fatal(EXIT.daemonDown, explainUnreachable(cause, port));
   }
 
-  const payload = await response.json().catch(() => ({}));
+  let payload = {};
+  try {
+    payload = JSON.parse(response.body.toString("utf8"));
+  } catch {
+    // A body we cannot parse is a protocol problem, not an empty answer.
+  }
 
   if (payload.ok) return payload.value;
 
