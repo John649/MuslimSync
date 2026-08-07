@@ -283,6 +283,33 @@ test("POST /createProject refuses a name with nothing usable", async () => {
 
 // ------------------------------------------------------------------ framing
 
+test("an empty body arrives as an array and is read as an empty map", async () => {
+  // Lua cannot distinguish an empty map from an empty array, and the plugin's
+  // encoder picks array. `{path = nil}` is exactly how the folder browser asks
+  // for the project roots, so rejecting [] broke root browsing in Studio.
+  makeProject(path.join(root, "race"));
+
+  const response = await fetch(`http://127.0.0.1:${daemon.port}/browse`, {
+    method: "POST",
+    body: Buffer.from(encode([])),
+  });
+
+  assert.equal(response.status, 200);
+  const value = decode(new Uint8Array(await response.arrayBuffer()));
+  assert.equal(value.path, root);
+  assert.deepEqual(value.entries.map((entry) => entry.name), ["race"]);
+});
+
+test("a non-empty array body is still refused", async () => {
+  // Only the empty case is ambiguous; a populated array is genuinely wrong.
+  const response = await fetch(`http://127.0.0.1:${daemon.port}/browse`, {
+    method: "POST",
+    body: Buffer.from(encode([1, 2, 3])),
+  });
+
+  assert.equal(response.status, 400);
+});
+
 test("a malformed body is rejected without taking the daemon down", async () => {
   const response = await fetch(`http://127.0.0.1:${daemon.port}/browse`, {
     method: "POST",

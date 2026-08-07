@@ -6,7 +6,8 @@
 // developer's global install.
 
 import { spawnSync } from "node:child_process";
-import { mkdirSync, existsSync } from "node:fs";
+import { mkdirSync, existsSync, readFileSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -41,6 +42,38 @@ if (!existsSync(binary)) {
 // build immediately — no Studio restart needed. The loop is: save, then Cmd+N.
 // Verified by watching a layout fix appear in a new place while the old one
 // kept running the previous build.
+/**
+ * Bakes the Argon auth token into the build.
+ *
+ * The fork's argon server rejects every mutating request without a matching
+ * x-argon-token, so a plugin built without one connects and is immediately
+ * disconnected with HTTP 401. The token lives in ~/.argon/auth.token and is
+ * written to src/AuthToken.luau, which is gitignored — the secret is embedded
+ * at build time and never committed.
+ *
+ * Missing token is a warning, not an error: a build for someone who has not run
+ * argon yet is still useful, and the AuthToken setting in the plugin remains an
+ * override.
+ */
+function embedAuthToken() {
+  const source = path.join(homedir(), ".argon", "auth.token");
+  const target = path.join(ROOT, "plugin", "src", "AuthToken.luau");
+
+  if (!existsSync(source)) {
+    console.warn(`no ${source} — building without an embedded auth token; argon will reject writes with 401`);
+    return;
+  }
+
+  const token = readFileSync(source, "utf8").trim();
+
+  if (!/^[0-9a-f]{8,}$/i.test(token)) {
+    console.warn(`${source} does not look like a token; skipping`);
+    return;
+  }
+
+  writeFileSync(target, `-- Generated at build time from ~/.argon/auth.token. Gitignored.\nreturn ${JSON.stringify(token)}\n`);
+}
+
 const install = process.argv.includes("--install");
 const watch = process.argv.includes("--watch");
 
@@ -55,6 +88,8 @@ if (install) {
 }
 
 if (watch) args.push("--watch");
+
+embedAuthToken();
 
 const result = spawnSync(binary, args, {
   cwd: path.join(ROOT, "plugin"),

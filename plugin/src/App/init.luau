@@ -90,7 +90,7 @@ function App.new()
 
 	-- Minimum widget size - the picker, details and create pages need
 	-- vertical room, so don't let the panel collapse below usability
-	self.rootSize = Value(Vector2.new(320, 400))
+	self.rootSize = Value(Vector2.new(320, 540))
 	self.icon = Value(Assets.Brand.Logo)
 	self.pages = Value({})
 

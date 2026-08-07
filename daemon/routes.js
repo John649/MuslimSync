@@ -31,9 +31,21 @@ async function readBody(request) {
 
   try {
     const decoded = decode(Buffer.concat(chunks));
-    if (decoded === null || typeof decoded !== "object" || Array.isArray(decoded)) {
+
+    // Lua cannot tell an empty map from an empty array, and the plugin's
+    // encoder resolves the tie as an array (MsgPack.luau: `length == mapLength`
+    // means array, and both are 0 when empty). So `{path = nil}` — which is how
+    // the browser asks for the project roots — arrives as []. Rejecting that as
+    // "not a map" broke root browsing entirely.
+    if (Array.isArray(decoded)) {
+      if (decoded.length === 0) return {};
       throw new HttpError(400, "body must be a map");
     }
+
+    if (decoded === null || typeof decoded !== "object") {
+      throw new HttpError(400, "body must be a map");
+    }
+
     return decoded;
   } catch (cause) {
     if (cause instanceof HttpError) throw cause;

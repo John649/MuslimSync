@@ -169,10 +169,13 @@ return function(props: Props): { Instance }
 
 	return {
 		List {
-			VerticalAlignment = Enum.VerticalAlignment.Center,
+			-- Top, not Center: these pages can be taller than the widget, and
+			-- centred overflow spills upward over the header as well as off
+			-- the bottom.
+			VerticalAlignment = Enum.VerticalAlignment.Top,
 		},
 		Text {
-			Text = "Create an MuslimSync project for this place. If the folder already exists, it is adopted instead:",
+			Text = "Create a MuslimSync project for this place. If the folder already exists, it is adopted instead:",
 			RichText = true,
 			TextWrapped = true,
 			AutomaticSize = Enum.AutomaticSize.Y,

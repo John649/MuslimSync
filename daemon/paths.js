@@ -7,6 +7,7 @@
 // is a directory traversal rather than a cosmetic glitch.
 
 import path from "node:path";
+import { homedir } from "node:os";
 import { realpathSync } from "node:fs";
 
 /**
@@ -29,6 +30,26 @@ export function isWithin(root, target) {
 }
 
 /**
+ * Expands a leading `~` to the home directory.
+ *
+ * The plugin's directory field displays paths shortened for readability
+ * (/Users/someone -> ~) and sends that same string back. Without this, `~`
+ * became a literal folder name and a project landed in
+ * <root>/~/projects/<root>/<name>. A `~` anywhere but the start is a legal
+ * filename character and stays literal.
+ */
+export function expandHome(candidate) {
+  const value = String(candidate ?? "");
+
+  if (value === "~") return homedir();
+  if (value.startsWith("~/") || value.startsWith("~\\")) {
+    return path.join(homedir(), value.slice(2));
+  }
+
+  return value;
+}
+
+/**
  * Resolves `candidate` and asserts it stays inside `root`, following symlinks
  * as far as they exist.
  *
@@ -39,7 +60,7 @@ export function isWithin(root, target) {
  */
 export function resolveWithin(root, candidate) {
   const realRoot = realpathSync(path.resolve(root));
-  const resolved = path.resolve(realRoot, candidate ?? "");
+  const resolved = path.resolve(realRoot, expandHome(candidate));
 
   if (!isWithin(realRoot, resolved)) {
     throw new PathEscape(`${resolved} is outside ${realRoot}`);

@@ -57,7 +57,10 @@ return function(props: Props): { Instance }
 
 	return {
 		List {
-			VerticalAlignment = Enum.VerticalAlignment.Center,
+			-- Top, not Center: these pages can be taller than the widget, and
+			-- centred overflow spills upward over the header as well as off
+			-- the bottom.
+			VerticalAlignment = Enum.VerticalAlignment.Top,
 		},
 		Text {
 			Text = props.Message,
