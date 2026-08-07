@@ -1,10 +1,10 @@
 {
-  "_note": "Toolbar and status icons are still Argon's uploaded artwork, inherited by the fork. They are NOT ours to ship under the MuslimSync name and must be replaced with our own uploads before any release. The banner was removed - App/Components/Wordmark.luau draws it instead.",
+  "_note": "Brand icons are blank until uploaded. Argon's uploaded artwork was removed \u2014 it is not ours to ship under this name. Run `npm run make:icons`, upload assets/*.png to Roblox, and paste the ids here; the toolbar button then shows connection state again. Icons/* are Argon's UI glyphs, still inherited.",
   "Brand": {
-    "Logo": "rbxassetid://16940983037",
-    "LogoOk": "rbxassetid://17419316559",
-    "LogoWarn": "rbxassetid://17419316412",
-    "LogoError": "rbxassetid://17419316704"
+    "Logo": "",
+    "LogoOk": "",
+    "LogoWarn": "",
+    "LogoError": ""
   },
   "Icons": {
     "Settings": "rbxassetid://16549970121",

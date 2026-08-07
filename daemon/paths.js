@@ -20,7 +20,12 @@ export function isWithin(root, target) {
   const from = path.resolve(root);
   const to = path.resolve(target);
 
-  if (from === to) return true;
+  // Windows paths are case-insensitive: C:\Users and c:\users are the same
+  // directory. Comparing them case-sensitively would refuse a perfectly valid
+  // path purely because the user typed a different case than realpath returned.
+  const same = process.platform === "win32" ? from.toLowerCase() === to.toLowerCase() : from === to;
+
+  if (same) return true;
 
   const relative = path.relative(from, to);
 

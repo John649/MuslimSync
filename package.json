@@ -15,7 +15,8 @@
     "build:plugin": "node scripts/build-plugin.mjs",
     "build:quran": "node quran/build-dataset.mjs",
     "check": "npm run test && npm run lint:plugin && node scripts/check-file-size.mjs",
-    "dev:plugin": "node scripts/build-plugin.mjs --watch --install"
+    "dev:plugin": "node scripts/build-plugin.mjs --watch --install",
+    "make:icons": "node scripts/make-icons.mjs"
   },
   "devDependencies": {
     "electron": "^33.0.0"

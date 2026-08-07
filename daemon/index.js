@@ -23,6 +23,7 @@ export class Daemon extends EventEmitter {
   #server;
   #wss;
   #sessions = new Map();
+  #nextSessionId = 1;
   // The cross-project clipboard. A copy in one place has to be pasteable in
   // another without the caller carrying an artifact id around by hand — that
   // is the entire point of calling it a clipboard.
@@ -42,8 +43,13 @@ export class Daemon extends EventEmitter {
     return [...this.#sessions.values()];
   }
 
+  /**
+   * Picks a session. Without a placeId, the most recently connected one — with
+   * several scratch places open, the newest is the one being worked in.
+   */
   session(placeId) {
-    return placeId ? this.#sessions.get(placeId) : this.sessions[0];
+    if (!placeId) return this.sessions.at(-1);
+    return this.sessions.find((session) => session.placeId === String(placeId));
   }
 
   status() {
@@ -52,6 +58,7 @@ export class Daemon extends EventEmitter {
       port: this.port,
       protocol: PROTOCOL,
       plugins: this.sessions.map((session) => ({
+        session: session.key,
         placeId: session.placeId,
         gameId: session.gameId,
         placeName: session.hello.placeName,
@@ -244,8 +251,8 @@ export class Daemon extends EventEmitter {
 
       // Only clear the map entry if this socket still owns it. A reconnect may
       // already have replaced it, and dropping that would strand the new one.
-      if (this.#sessions.get(session.placeId) === session) {
-        this.#sessions.delete(session.placeId);
+      if (this.#sessions.get(session.key) === session) {
+        this.#sessions.delete(session.key);
       }
 
       session.close();
@@ -258,19 +265,31 @@ export class Daemon extends EventEmitter {
   }
 
   #register(hello, socket) {
-    // Studio was reopened, or the plugin reloaded. The stale session's pending
-    // requests must fail rather than wait on a socket nobody is reading.
-    const existing = this.#sessions.get(hello.placeId);
-    if (existing) existing.close("replaced by a new plugin connection");
+    // Sessions are keyed by a connection id, not by placeId. Every unpublished
+    // place reports placeId 0, so keying on it meant two scratch places open at
+    // once collapsed into one session and fought over it — found by opening a
+    // second place to test cross-project paste.
+    //
+    // A published place still gets replace-on-reconnect, which is what makes a
+    // Studio reload or plugin reload clean up after itself.
+    if (hello.placeId !== "0") {
+      for (const [key, existing] of this.#sessions) {
+        if (existing.placeId === hello.placeId) {
+          existing.close("replaced by a new plugin connection");
+          this.#sessions.delete(key);
+        }
+      }
+    }
 
     const session = new Session({
       send: (raw) => socket.send(raw),
       hello,
     });
 
+    session.key = String(this.#nextSessionId++);
     session.onEvent((event) => this.emit("plugin-event", { placeId: session.placeId, ...event }));
 
-    this.#sessions.set(hello.placeId, session);
+    this.#sessions.set(session.key, session);
     this.emit("change", this.status());
 
     return session;

@@ -19,13 +19,18 @@ export const DEFAULT_BASE_PORT = 8000;
 const READY_TIMEOUT_MS = 15_000;
 const READY_POLL_MS = 150;
 
-/** The vendored binary for this platform, or null when unsupported. */
-export function vendoredArgon() {
-  const platform = {
+/** The vendor directory name for this platform, or null when unsupported. */
+export function platformSlug() {
+  return {
     darwin: { arm64: "darwin-arm64", x64: "darwin-x64" },
     win32: { x64: "windows-x86_64" },
     linux: { x64: "linux-x86_64" },
-  }[process.platform]?.[process.arch];
+  }[process.platform]?.[process.arch] ?? null;
+}
+
+/** The vendored binary for this platform, or null when it is not present. */
+export function vendoredArgon() {
+  const platform = platformSlug();
 
   if (!platform) return null;
 
@@ -105,7 +110,15 @@ export class ArgonProcesses {
   }
 
   async #launch(projectPath) {
-    if (!this.binary) throw new Error(`no vendored argon for ${process.platform}/${process.arch}`);
+    if (!this.binary) {
+      // Actionable, because the fix is a file the user has to put somewhere —
+      // no amount of retrying will produce it.
+      throw new Error(
+        `no argon binary for ${process.platform}/${process.arch}. ` +
+          `Download an argon release and place it at vendor/argon/${platformSlug()}/` +
+          (process.platform === "win32" ? "argon.exe" : "argon"),
+      );
+    }
 
     const port = await this.#freePort();
 
