@@ -101,6 +101,14 @@ function decodeHello(frame) {
       frame.placeName === undefined || frame.placeName === null
         ? null
         : requireString(frame.placeName, "placeName", { max: 128 }),
+    // Persistent across restarts, which placeId is not for an unpublished
+    // place: every one of those reports 0, so the id alone cannot tell two of
+    // them apart. Optional — an older plugin will not send it, and a place with
+    // no marker yet has none to send.
+    argonId:
+      frame.argonId === undefined || frame.argonId === null
+        ? null
+        : requireString(frame.argonId, "argonId", { max: 64 }),
   };
 }
 

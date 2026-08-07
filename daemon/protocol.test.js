@@ -38,6 +38,7 @@ test("accepts a well-formed hello", () => {
     gameId: "456",
     pluginVersion: "0.1.0",
     placeName: null,
+    argonId: null,
   });
 });
 
@@ -179,4 +180,27 @@ test("toError normalizes protocol errors, plain errors, and thrown values", () =
   assert.equal(toError(new Error("plain")).message, "plain");
   assert.equal(toError("just a string").message, "just a string");
   assert.equal(toError(new Error("x"), ERROR.TIMEOUT).code, ERROR.TIMEOUT);
+});
+
+test("a hello carries the place's persistent marker when it has one", () => {
+  // placeId is 0 for every unpublished place, so it cannot tell two of them
+  // apart. The argonId marker lives in the place and survives restarts.
+  const hello = decodeFrame(JSON.stringify({
+    t: "hello",
+    protocol: 1,
+    placeId: "0",
+    gameId: "0",
+    pluginVersion: "0.1.0",
+    argonId: "5710ed8f-edf2-4a7c-871e-54a7c8505298",
+  }));
+
+  assert.equal(hello.argonId, "5710ed8f-edf2-4a7c-871e-54a7c8505298");
+});
+
+test("a plugin too old to send a marker still connects", () => {
+  const hello = decodeFrame(JSON.stringify({
+    t: "hello", protocol: 1, placeId: "0", gameId: "0", pluginVersion: "0.0.9",
+  }));
+
+  assert.equal(hello.argonId, null);
 });

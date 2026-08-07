@@ -193,6 +193,39 @@ Projects MuslimSync creates get it automatically. Installing is idempotent and
 only ever touches the block between its own markers, so the rest of a project's
 AGENTS.md is left alone.
 
+## Turning commands off
+
+A project decides which commands exist in it. Put a `.muslimsync/config.json`
+at its root:
+
+```json
+{
+  "commands": {
+    "disable": ["eval", "source"]
+  }
+}
+```
+
+Or the other way round, when you want a small surface:
+
+```json
+{
+  "commands": {
+    "only": ["ls", "get", "tree", "query", "set"]
+  }
+}
+```
+
+A disabled command is not merely refused at the call — it disappears from
+`msync help`, from `msync commands`, and from the generated AGENTS.md. An agent
+cannot misuse a tool it was never told about, which is a stronger guarantee
+than documenting that it should not.
+
+The file is found by walking up from the working directory, so it applies to
+whatever project you are standing in. `help`, `doctor`, `commands` and `status`
+survive any config: a project nobody can debug is worse than one with too many
+commands.
+
 ## Development
 
 ```bash

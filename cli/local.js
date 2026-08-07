@@ -10,6 +10,7 @@ import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { registry } from "./commands.js";
+import { isEnabled } from "./config.js";
 import { help, dim, green, cyan, red } from "./format.js";
 import { diagnose, formatReport } from "./doctor.js";
 import { explainUnreachable } from "./reach.js";
@@ -19,13 +20,14 @@ import { runTest, formatVerdict, TestFailure } from "./playtest.js";
 import { UsageError } from "./args.js";
 
 /** Commands answered without touching the plugin. */
-export async function local(name, { flags, positionals = [], port, daemon, Fatal, EXIT }) {
+export async function local(name, { flags, positionals = [], port, daemon, Fatal, EXIT, config }) {
   switch (name) {
     case "help":
-      return { text: help() };
+      return { text: help([], (command) => isEnabled(command, config)) };
 
     case "commands":
-      return { json: registry() };
+      // Filtered, because this is what an agent reads to learn the surface.
+      return { json: registry((command) => isEnabled(command, config)) };
 
     case "new-command": {
       const { scaffold } = await import("./scaffold.js");
@@ -77,7 +79,7 @@ export async function local(name, { flags, positionals = [], port, daemon, Fatal
         options = { groups: "all" };
       }
 
-      const markdown = renderAgentsMd(options);
+      const markdown = renderAgentsMd({ ...options, available: (command) => isEnabled(command, config) });
 
       // Printed as well as committed: an agent pointed at a machine, rather
       // than at the repo, still has a way to ask what this tool can do.
@@ -124,13 +126,19 @@ export async function local(name, { flags, positionals = [], port, daemon, Fatal
       }
 
       const health = JSON.parse(response.body.toString("utf8"));
-      const plugins = health.plugins.map((p) => `  ${p.placeName ?? "unnamed"} ${dim(`(${p.placeId})`)}`);
+      // The arrow marks where an op with no --place will land. With two
+      // places open that is the difference between editing your game and
+      // editing something else.
+      const plugins = health.plugins.map((p) => {
+        const here = p.ref === health.target ? "→" : " ";
+        return `${here} ${(p.placeName ?? "unnamed").padEnd(24)} ${dim(`--place ${p.ref}`)}`;
+      });
 
       return {
         json: health,
         text: [
           `daemon   listening on ${health.port}`,
-          `plugins  ${health.plugins.length}`,
+          `plugins  ${health.plugins.length}${health.plugins.length > 1 ? dim("  (→ is the default)") : ""}`,
           ...plugins,
         ].join("\n"),
       };

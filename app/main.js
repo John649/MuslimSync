@@ -154,6 +154,11 @@ function daemonStatus() {
   return { ...(daemon?.status() ?? { listening: false, port: null, plugins: [] }), error: daemonError };
 }
 
+/** Project paths argon is currently serving. Empty when nothing is synced. */
+function servingPaths() {
+  return [...(argon?.running ?? new Map()).keys()];
+}
+
 function publishStatus() {
   window?.webContents.send("daemon:status", daemonStatus());
   // Serving state is part of what the projects list shows, so the two are
@@ -175,6 +180,7 @@ async function startDaemon() {
       port: controlPort,
       // A second front door for shells that sandbox loopback networking.
       socketFile: socketPath(settings.DIR),
+      serving: servingPaths,
       // The plugin's project endpoints. Reading the root per request rather
       // than capturing it means changing it in Settings takes effect at once.
       routes: createRoutes({

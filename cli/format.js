@@ -234,11 +234,11 @@ function bytes(n) {
 }
 
 /** The help screen, derived from the command table. */
-export function help(custom = []) {
+export function help(custom = [], available = () => true) {
   const lines = [bold("msync") + dim(" — Roblox Studio from the command line"), ""];
 
   for (const group of GROUPS) {
-    const entries = Object.entries(COMMANDS).filter(([, spec]) => spec.group === group);
+    const entries = Object.entries(COMMANDS).filter(([name, spec]) => spec.group === group && available(name));
     if (!entries.length) continue;
 
     lines.push(bold(group));

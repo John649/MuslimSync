@@ -16,6 +16,7 @@ import { runTest, formatVerdict, TestFailure } from "./playtest.js";
 import { local } from "./local.js";
 import { explainUnreachable } from "./reach.js";
 import { send } from "./transport.js";
+import { readConfig, isEnabled, whyDisabled, ConfigError } from "./config.js";
 import { waitForContext } from "./playtest.js";
 
 const APP_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -177,10 +178,13 @@ async function writePhoto(port, result, flags) {
 
 /** Turns positionals and flags into the op's argument object. */
 function opArguments(name, spec, positionals, flags) {
-  const { raw, port, help: wantsHelp, ...rest } = flags;
+  const { raw, port, help: wantsHelp, place, force, ...rest } = flags;
   void raw;
   void port;
   void wantsHelp;
+  // Routing and client-side guards, not arguments the plugin should receive.
+  void place;
+  void force;
 
   if (name === "photo" && typeof rest.region === "string") {
     const numbers = rest.region.split(",").map((part) => Number(part.trim()));
@@ -215,6 +219,9 @@ async function main(argv) {
   const { command, positionals, flags } = parse(argv);
   const port = Number(flags.port ?? process.env.MUSLIMSYNC_PORT ?? DEFAULT_PORT);
 
+  // Read first: help, the registry and dispatch all consult it.
+  const config = readConfig();
+
   if (!command || command === "help") {
     // `msync help photo` is the form people reach for first, and answering it
     // with the full index makes the tool look like it has no per-command help.
@@ -232,11 +239,17 @@ async function main(argv) {
     }
 
     const { commands: custom } = discover({ project: process.cwd(), appRoot: APP_ROOT });
-    process.stdout.write(`${help(custom)}\n`);
+    process.stdout.write(`${help(custom, (name) => isEnabled(name, config))}\n`);
     return EXIT.ok;
   }
 
   const spec = COMMANDS[command];
+
+  // Checked before dispatch so a disabled command cannot reach the daemon,
+  // whatever route it would have taken.
+  if (spec && !isEnabled(command, config)) {
+    throw new Fatal(EXIT.usage, whyDisabled(command, config));
+  }
 
   if (!spec) {
     // A name we do not know might be a command the user dropped in a folder.
@@ -254,13 +267,33 @@ async function main(argv) {
   }
 
   if (spec.local) {
-    const result = await local(spec.local, { flags, positionals, port, daemon, Fatal, EXIT });
+    const result = await local(spec.local, { flags, positionals, port, daemon, Fatal, EXIT, config });
     process.stdout.write(`${flags.raw ? JSON.stringify(result.json ?? null, null, 2) : result.text}\n`);
     return EXIT.ok;
   }
 
   // Latency is a property of the round trip, which only this end can see —
   // the plugin has no idea when the request left.
+  // Reading a script through Studio when the same script is a file on disk is
+  // a round trip per file for something `cat` returns instantly, it cannot be
+  // grepped across, and it hands back a second copy of the thing you are about
+  // to edit on disk. Refused rather than discouraged, because a note in the
+  // docs does not stop it happening.
+  if (command === "source" && flags.force !== true) {
+    const health = await send({ port, route: "/health" })
+      .then((response) => JSON.parse(response.body.toString("utf8")))
+      .catch(() => null);
+
+    if (health?.serving?.length) {
+      throw new Fatal(
+        EXIT.usage,
+        `this place is synced — read the file instead of going through Studio.\n` +
+          `  synced to: ${health.serving.join(", ")}\n` +
+          `  --force reads it through Studio anyway, which is for unsaved drafts`,
+      );
+    }
+  }
+
   const startedAt = Date.now();
   const args = opArguments(command, spec, positionals, flags);
 
@@ -290,6 +323,9 @@ async function main(argv) {
   const result = await daemon(port, "/op", {
     op: spec.op,
     args,
+    // Which place. Without it the daemon uses the most recently connected,
+    // which is a guess when more than one is open.
+    placeId: flags.place,
     // A capture ships megabytes of RGBA through base64 chunks; the default is
     // sized for reads that answer instantly.
     timeoutMs: spec.timeoutMs,
@@ -323,6 +359,11 @@ async function main(argv) {
 main(process.argv.slice(2))
   .then((code) => process.exit(code))
   .catch((error) => {
+    if (error instanceof ConfigError) {
+      process.stderr.write(`${red("config")}: ${error.message}\n`);
+      process.exit(EXIT.usage);
+    }
+
     if (error instanceof UsageError) {
       process.stderr.write(`${red("usage")}: ${error.message}\n`);
       process.exit(EXIT.usage);

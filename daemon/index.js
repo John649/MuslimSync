@@ -12,7 +12,7 @@ import { EventEmitter } from "node:events";
 import { WebSocketServer } from "ws";
 import { rmSync } from "node:fs";
 
-import { listenOnSocket } from "./socket.js";
+import { listenOnIpv6, listenOnUnix } from "./listeners.js";
 
 import { decodeFrame, DEFAULT_PORT, ERROR, MAX_FRAME_BYTES, PROTOCOL } from "./protocol.js";
 import { Session } from "./session.js";
@@ -34,12 +34,15 @@ export class Daemon extends EventEmitter {
   // is the entire point of calling it a clipboard.
   #clipboard = null;
 
-  constructor({ port = DEFAULT_PORT, host = HOST, routes = {}, socketFile = null } = {}) {
+  constructor({ port = DEFAULT_PORT, host = HOST, routes = {}, socketFile = null, serving = () => [] } = {}) {
     super();
     this.port = port;
     // Optional second front door: a unix socket, for shells that sandbox
     // loopback networking. Null means TCP only.
     this.socketFile = socketFile;
+    // Which projects are being synced. `source` uses it to refuse reading a
+    // script through Studio when the same script is a file on disk.
+    this.serving = serving;
     this.host = host;
     // The plugin's project endpoints. Empty in the headless case, where there
     // is no configured projects root to serve them from.
@@ -55,9 +58,30 @@ export class Daemon extends EventEmitter {
    * Picks a session. Without a placeId, the most recently connected one — with
    * several scratch places open, the newest is the one being worked in.
    */
-  session(placeId) {
-    if (!placeId) return this.sessions.at(-1);
-    return this.sessions.find((session) => session.placeId === String(placeId));
+  /**
+   * The session a request should go to.
+   *
+   * `place` selects by session key, by placeId, or by a case-insensitive
+   * substring of the place name — because every unpublished place reports
+   * placeId 0, so the id alone cannot tell two of them apart.
+   *
+   * With nothing given it is the most recently connected place. That is a guess
+   * dressed as a default, so `sessions.length > 1` is reported to the caller,
+   * which turns it into something the CLI can warn about rather than something
+   * that silently writes to the wrong game.
+   */
+  session(place) {
+    if (!place) return this.sessions.at(-1);
+
+    const wanted = String(place).toLowerCase();
+
+    return (
+      this.sessions.find((session) => session.ref.toLowerCase() === wanted) ??
+      this.sessions.find((session) => session.key === wanted) ??
+      this.sessions.find((session) => session.placeId === String(place)) ??
+      this.sessions.find((session) => (session.placeName ?? "").toLowerCase().includes(wanted)) ??
+      null
+    );
   }
 
   status() {
@@ -66,7 +90,12 @@ export class Daemon extends EventEmitter {
       port: this.port,
       protocol: PROTOCOL,
       socket: this.#socket ? this.socketFile : null,
+      // The default target, so a caller can see which place it is about to
+      // write to rather than discovering it afterwards.
+      target: this.sessions.at(-1)?.ref ?? null,
+      serving: this.serving(),
       plugins: this.sessions.map((session) => ({
+        ref: session.ref,
         session: session.key,
         placeId: session.placeId,
         gameId: session.gameId,
@@ -84,7 +113,11 @@ export class Daemon extends EventEmitter {
 
     if (!session) {
       const error = new Error(
-        placeId ? `no Studio plugin connected for place ${placeId}` : "no Studio plugin is connected",
+        placeId
+          ? `no connected place matches "${placeId}". Open ones: ${
+              this.sessions.map((s) => s.placeName ?? s.key).join(", ") || "none"
+            }`
+          : "no Studio plugin is connected",
       );
       error.code = ERROR.NOT_CONNECTED;
       return Promise.reject(error);
@@ -111,7 +144,12 @@ export class Daemon extends EventEmitter {
         // anything that resolves `localhost` to ::1 first — which some tools
         // and some shells do — gets connection refused while the daemon is
         // plainly running. Loopback either way, so nothing new is exposed.
-        Promise.all([this.#listenOnIpv6Loopback(), this.#listenOnUnixSocket()]).finally(() => {
+        const extras = { onRequest: (req, res) => this.#handleHttp(req, res), wss: this.#wss, path: "/control" };
+
+        Promise.all([
+          listenOnIpv6(this.port, extras).then((server) => (this.#ipv6 = server)),
+          listenOnUnix(this.socketFile, extras).then((server) => (this.#socket = server)),
+        ]).finally(() => {
           this.emit("change", this.status());
           resolve(this.status());
         });
@@ -119,65 +157,6 @@ export class Daemon extends EventEmitter {
     });
   }
 
-  /**
-   * Second listener on ::1, sharing the same handlers.
-   *
-   * Best effort: a host with IPv6 disabled has nothing to bind, and that is not
-   * a reason to refuse to start.
-   */
-  #listenOnIpv6Loopback() {
-    return new Promise((resolve) => {
-      const server = createServer((request, response) => this.#handleHttp(request, response));
-
-      server.once("error", () => {
-        server.close();
-        resolve();
-      });
-
-      server.listen(this.port, "::1", () => {
-        this.#ipv6 = server;
-        // The websocket server attaches to the upgrade event, so the second
-        // listener needs its own hand-off to the same pool.
-        server.on("upgrade", (request, socket, head) => {
-          // The IPv4 listener gets path filtering from the WebSocketServer's
-          // own `path` option; this one has to do it by hand.
-          if (new URL(request.url, "http://localhost").pathname !== "/control") {
-            socket.destroy();
-            return;
-          }
-
-          this.#wss.handleUpgrade(request, socket, head, (ws) => this.#wss.emit("connection", ws, request));
-        });
-        resolve();
-      });
-    });
-  }
-
-  /**
-   * Serves the same routes on a unix socket, when one was configured.
-   *
-   * A network sandbox blocks loopback TCP but not a file, which is what makes
-   * this the difference between `msync ls` working inside an agent shell and
-   * dying at EPERM.
-   */
-  async #listenOnUnixSocket() {
-    if (!this.socketFile) return;
-
-    this.#socket = await listenOnSocket(
-      this.socketFile,
-      (request, response) => this.#handleHttp(request, response),
-      {
-        onUpgrade: (request, socket, head) => {
-          if (new URL(request.url, "http://localhost").pathname !== "/control") {
-            socket.destroy();
-            return;
-          }
-
-          this.#wss.handleUpgrade(request, socket, head, (ws) => this.#wss.emit("connection", ws, request));
-        },
-      },
-    );
-  }
 
   async stop() {
     for (const session of this.sessions) session.close("the daemon is shutting down");

@@ -209,6 +209,10 @@ function Control:connect(): boolean
 		-- "Place1" even for a published place, so every rail icon in the app
 		-- came out as an indistinguishable "P".
 		placeName = Discovery.placeName(),
+		-- Read, never created: ensureMarker() writes a StringValue into
+		-- ServerStorage, and dirtying every place you merely open in order to
+		-- label it would be a rude way to get an identifier.
+		argonId = Discovery.getMarker(),
 		pluginVersion = Handlers.version(),
 	})
 

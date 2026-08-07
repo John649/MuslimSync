@@ -309,7 +309,9 @@ test("answers on the IPv6 loopback as well as the IPv4 one", async () => {
     const four = await fetch(`http://127.0.0.1:${daemon.port}/health`);
     assert.equal(four.status, 200);
 
-    const six = await fetch(`http://[::1]:${daemon.port}/health`).catch(() => null);
+    const six = await fetch(`http://[::1]:${daemon.port}/health`, {
+    signal: AbortSignal.timeout(3000),
+  }).catch(() => null);
 
     // A host with IPv6 disabled legitimately has nothing to bind, so this
     // asserts the shape rather than demanding the connection.
@@ -317,4 +319,38 @@ test("answers on the IPv6 loopback as well as the IPv4 one", async () => {
   } finally {
     await daemon.stop();
   }
+});
+
+test("an unpublished place is addressable by its marker, not by placeId 0", () => {
+  // Two unpublished places both report placeId 0, so selecting by id picks
+  // whichever matched first — which is to say, the wrong one half the time.
+  const make = (key, argonId, placeName) => ({
+    key,
+    placeId: "0",
+    placeName,
+    get ref() {
+      return argonId ? argonId.slice(0, 8) : key;
+    },
+  });
+
+  // Subclassed rather than started: session() only reads `sessions`, so there
+  // is no reason to open a listener that then has to be closed.
+  class Fake extends Daemon {
+    constructor(list) {
+      super({ port: 0 });
+      this.list = list;
+    }
+
+    get sessions() {
+      return this.list;
+    }
+  }
+
+  const daemon = new Fake([make("1", "aaaaaaaa-1111", "Lobby"), make("2", "bbbbbbbb-2222", "Arena")]);
+
+  assert.equal(daemon.session("aaaaaaaa").placeName, "Lobby");
+  assert.equal(daemon.session("bbbbbbbb").placeName, "Arena");
+  assert.equal(daemon.session("arena").placeName, "Arena", "matching by name should work too");
+  assert.equal(daemon.session().placeName, "Arena", "no selector means the most recent");
+  assert.equal(daemon.session("nope"), null);
 });

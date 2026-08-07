@@ -40,7 +40,8 @@ export const COMMANDS = {
   source: {
     op: "source",
     group: "Navigate",
-    summary: "Print a script's source, including unsaved editor drafts",
+    summary: "Print a script's source — for unsynced places and unsaved drafts",
+    flags: { force: "read through Studio even when the place is synced" },
     positional: { required: ["path"] },
     examples: ["msync source ReplicatedStorage/Config"],
   },
@@ -259,13 +260,18 @@ export const COMMANDS = {
 };
 
 /** Groups, in the order help should print them. */
+// Available on every op, so it is documented once rather than on each command.
+export const GLOBAL_FLAGS = {
+  place: "which connected place to act on — its ref, name, or placeId (see `msync status`)",
+};
+
 export const GROUPS = ["Navigate", "Write", "Studio", "Capture", "Playtest", "Transfer", "Info", "Deen"];
 
 /** The registry an agent reads. Derived, never hand-maintained. */
-export function registry() {
+export function registry(available = () => true) {
   return {
     schemaVersion: 1,
-    commands: Object.entries(COMMANDS).map(([name, spec]) => ({
+    commands: Object.entries(COMMANDS).filter(([name]) => available(name)).map(([name, spec]) => ({
       name,
       group: spec.group,
       summary: spec.summary,

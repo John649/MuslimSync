@@ -23,6 +23,20 @@ export class Session {
     this.connectedAt = Date.now();
   }
 
+  /**
+   * The shortest stable handle for this place.
+   *
+   * A published place has a real placeId. An unpublished one reports 0, so its
+   * argonId marker is used instead — it lives in the place and survives
+   * restarts. With neither, the connection key is all there is, and that only
+   * lasts as long as the connection.
+   */
+  get ref() {
+    if (this.placeId && this.placeId !== "0") return this.placeId;
+    if (this.hello.argonId) return this.hello.argonId.slice(0, 8);
+    return this.key;
+  }
+
   get placeId() {
     return this.hello.placeId;
   }

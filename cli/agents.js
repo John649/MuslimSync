@@ -50,6 +50,11 @@ const CONVENTIONS = `## Conventions worth knowing
   checks that make it safe.
 - **Every write is one undo step.** A failed write is rolled back rather than
   half-applied.
+- **Read scripts from disk, not through Studio.** In a synced project every
+  script is already a file — open it with your normal file tools. \`msync source\`
+  costs a round trip per file, cannot be grepped across, and hands you a second
+  copy of the thing you are about to edit on disk. Use it only for what is not
+  on disk: an unsynced place, or a draft the user has not saved yet.
 - **Reads are free and cheap.** Prefer \`ls\`/\`tree\`/\`query\` over \`eval\` for
   anything you could look up; \`eval\` runs arbitrary code in the user's open
   place.
@@ -68,6 +73,13 @@ Branch on these rather than parsing prose.
 | 6 | a test failed | the place is wrong, not the tool |
 | 7 | the setup is broken | run \`msync doctor\`; it says what to fix |
 
+## Turning commands off
+
+A project can disable commands in \`.muslimsync/config.json\`
+(\`commands.disable\`, or \`commands.only\` for an allowlist). Anything disabled
+is absent from this file and from \`msync commands\`, so if a command is listed
+here it is available.
+
 ## Adding a command
 
 A folder with a \`command.json\` and one of \`run.js\`, \`run.luau\`, or
@@ -80,16 +92,23 @@ every project); \`--kind\` picks \`luau\`, \`node\`, or \`workflow\`. See
 
 const TRANSFER = `## Taking something from another game
 
-The clipboard lives in the daemon, not in Studio, so it survives switching
-places. That is what makes "add the quest system from my other game" a real
-workflow rather than a rebuild:
+The clipboard lives in the daemon, not in Studio, so it is not tied to one
+place. Neither place has to be a project, and with both open there is no
+switching at all — \`msync status\` lists what is connected and the \`--place\`
+to name it:
 
-1. Open the source place in Studio. \`msync copy ServerScriptService/QuestSystem\`
-   — several paths at once also work, and \`msync copy\` with no path takes
-   whatever is selected in Studio.
-2. Open the destination place. Nothing needs re-copying; the clipboard is still
-   holding it.
-3. \`msync paste ServerScriptService\`.
+\`\`\`bash
+msync status                                       # see what is open
+msync copy ServerScriptService/QuestSystem --place 1
+msync paste ServerScriptService --place 2
+\`\`\`
+
+Several paths at once also work, and \`msync copy\` with no path takes whatever
+is selected in Studio. With only one place open, \`--place\` can be left off.
+
+**Pass \`--place\` whenever more than one place is connected.** Without it a
+command goes to whichever place connected most recently, which is a guess — and
+for \`rm\`, \`set\` or \`paste\` it is a guess that writes to the wrong game.
 
 It is a real .rbxm round-trip through SerializationService, so what lands is the
 exact instances — scripts with their source, properties, and everything nested
@@ -132,10 +151,14 @@ msync commands --raw      # the whole registry as JSON
 `;
 
 /** Commands bucketed by group, in the order the CLI presents them. */
-function grouped() {
+function grouped(available = () => true) {
   const byGroup = new Map(GROUPS.map((group) => [group, []]));
 
   for (const [name, spec] of Object.entries(COMMANDS)) {
+    // A command the project turned off must not appear in the brief: an agent
+    // cannot misuse a tool it was never told about.
+    if (!available(name)) continue;
+
     // A command in no known group would silently vanish from the brief, which
     // is exactly the drift generating this file is meant to prevent.
     if (!byGroup.has(spec.group)) byGroup.set(spec.group, []);
@@ -252,8 +275,8 @@ function usage(name, spec) {
  * captures anything should not spend context explaining capture. Passing "all"
  * spells out everything.
  */
-export function renderAgentsMd({ groups, repo = false } = {}) {
-  const byGroup = grouped();
+export function renderAgentsMd({ groups, repo = false, available } = {}) {
+  const byGroup = grouped(available);
   const known = [...byGroup.keys()];
 
   const shown = groups === "all" ? known : (groups ?? CORE).filter((group) => known.includes(group));

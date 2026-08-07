@@ -167,7 +167,8 @@ test("the cross-place workflow ships whenever copy and paste do", () => {
   const markdown = renderAgentsMd();
 
   assert.match(markdown, /Taking something from another game/);
-  assert.match(markdown, /survives switching\nplaces/);
+  assert.match(markdown, /not tied to one\nplace/);
+  assert.match(markdown, /--place/, "the brief must name how to pick a place");
 });
 
 test("that workflow is dropped when transfer is out of scope", () => {
