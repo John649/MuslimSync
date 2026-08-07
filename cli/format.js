@@ -95,8 +95,13 @@ export function render(command, result) {
 
     case "find": {
       const rows = (result.matches ?? []).map((m) => `  ${m.path} ${dim(m.class)}`);
-      const note = dim(`${result.matches.length} match(es), visited ${result.visited}${result.truncated ? ", truncated" : ""}`);
-      return [...rows, note].join("\n");
+      // Say what was searched, so a surprising result set is explainable
+      // rather than mysterious.
+      const scope = Array.isArray(result.under) ? `${result.under.length} services` : result.under;
+      const note = dim(
+        `${result.matches.length} match(es) in ${scope}, visited ${result.visited}${result.truncated ? ", truncated" : ""}`,
+      );
+      return [...rows.length ? rows : [dim("  (no matches)")], note].join("\n");
     }
 
     case "source":

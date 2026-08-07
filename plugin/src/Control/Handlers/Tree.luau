@@ -17,6 +17,25 @@ local MAX_NODES = 5000
 local MAX_MATCHES = 1000
 local MAX_DEPTH = 32
 
+-- What a place is actually made of. Deliberately excludes CoreGui,
+-- PluginGuiService and the rest of Studio's own interface, which are not the
+-- user's game and are never what a search is asking about.
+local PLACE_SERVICES = {
+	"Workspace",
+	"ReplicatedStorage",
+	"ReplicatedFirst",
+	"ServerScriptService",
+	"ServerStorage",
+	"StarterGui",
+	"StarterPack",
+	"StarterPlayer",
+	"Lighting",
+	"SoundService",
+	"Teams",
+	"Chat",
+	"TextChatService",
+}
+
 local function fail(code: string, message: string): never
 	error({ code = code, message = message }, 0)
 end
@@ -89,7 +108,10 @@ local BY_CLASS: { [string]: { string } } = {
 	TextLabel = { "Text", "TextColor3", "TextSize", "Font", "TextWrapped" },
 	TextButton = { "Text", "TextColor3", "TextSize", "Font" },
 	ImageLabel = { "Image", "ImageColor3", "ImageTransparency" },
-	LuaSourceContainer = { "Enabled", "RunContext" },
+	-- Enabled and RunContext are BaseScript members. A ModuleScript is a
+	-- LuaSourceContainer but has neither, which is why `props` on one used to
+	-- show nothing but Name and ClassName.
+	BaseScript = { "Enabled", "RunContext" },
 	Humanoid = { "Health", "MaxHealth", "WalkSpeed", "JumpPower" },
 	Camera = { "CFrame", "FieldOfView", "CameraType" },
 	Lighting = { "Ambient", "Brightness", "ClockTime", "FogEnd" },
@@ -123,6 +145,21 @@ local function propertiesOf(instance: Instance)
 
 		if ok then
 			properties[name] = Value.encode(raw)
+		end
+	end
+
+	-- A script's interesting property is its source, but dumping it into every
+	-- `props` call would bury everything else. Its shape is the useful summary;
+	-- `source` fetches the text itself.
+	if instance:IsA("LuaSourceContainer") then
+		local ok, source = pcall(function()
+			return (instance :: any).Source
+		end)
+
+		if ok and type(source) == "string" then
+			local _, newlines = source:gsub("\n", "")
+			properties.SourceBytes = #source
+			properties.SourceLines = if #source == 0 then 0 else newlines + 1
 		end
 	end
 
@@ -238,8 +275,24 @@ return function(_context)
 		end,
 
 		--- Descendants filtered by class and/or name substring.
+		---
+		--- Without `under`, this searches the services a place is actually made
+		--- of. Searching `game` reaches CoreGui and PluginGuiService, so
+		--- `find --class Camera` used to return Studio's own interface
+		--- alongside the user's — answers about the wrong program entirely.
 		find = function(args)
-			local root = resolve(args.under)
+			local roots: { Instance } = {}
+
+			if type(args.under) == "string" and args.under ~= "" then
+				table.insert(roots, resolve(args.under))
+			else
+				for _, name in PLACE_SERVICES do
+					local service = game:FindFirstChild(name)
+					if service then
+						table.insert(roots, service)
+					end
+				end
+			end
 			local class = if type(args.class) == "string" and args.class ~= "" then args.class else nil
 			local name = if type(args.name) == "string" and args.name ~= "" then args.name:lower() else nil
 
@@ -251,23 +304,34 @@ return function(_context)
 			local visited = 0
 			local truncated = false
 
-			for _, descendant in root:GetDescendants() do
-				visited += 1
+			for _, root in roots do
+				for _, descendant in root:GetDescendants() do
+					visited += 1
 
-				if visited > MAX_NODES or #matches >= MAX_MATCHES then
-					truncated = true
-					break
+					if visited > MAX_NODES or #matches >= MAX_MATCHES then
+						truncated = true
+						break
+					end
+
+					local classOk = not class or descendant:IsA(class :: any)
+					local nameOk = not name or descendant.Name:lower():find(name, 1, true) ~= nil
+
+					if classOk and nameOk then
+						table.insert(matches, describe(descendant))
+					end
 				end
 
-				local classOk = not class or descendant:IsA(class :: any)
-				local nameOk = not name or descendant.Name:lower():find(name, 1, true) ~= nil
-
-				if classOk and nameOk then
-					table.insert(matches, describe(descendant))
+				if truncated then
+					break
 				end
 			end
 
-			return { under = Value.pathOf(root), visited = visited, truncated = truncated, matches = matches }
+			local scope = {}
+			for _, root in roots do
+				table.insert(scope, root.Name)
+			end
+
+			return { under = scope, visited = visited, truncated = truncated, matches = matches }
 		end,
 	}
 end
