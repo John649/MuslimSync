@@ -7,9 +7,6 @@
   "engines": {
     "node": ">=20"
   },
-  "bin": {
-    "msync": "./cli/msync.js"
-  },
   "scripts": {
     "start": "electron .",
     "daemon": "node daemon/index.js",
