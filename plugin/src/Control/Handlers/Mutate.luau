@@ -12,6 +12,7 @@ local Selection = game:GetService("Selection")
 
 local MuslimSync = script:FindFirstAncestor("MuslimSync")
 
+local Path = require(MuslimSync.Control.Path)
 local Value = require(MuslimSync.Control.Value)
 
 local MAX_TAGS = 64
@@ -20,20 +21,7 @@ local function fail(code: string, message: string): never
 	error({ code = code, message = message }, 0)
 end
 
-local function resolve(path: any): Instance
-	local text = if type(path) == "string" then path else ""
-	local current: Instance = game
-
-	for segment in text:gmatch("[^/]+") do
-		local child = current:FindFirstChild(segment)
-		if not child then
-			fail("NOT_FOUND", `no instance at {text} (stopped at {segment})`)
-		end
-		current = child
-	end
-
-	return current
-end
+local resolve = Path.resolve
 
 --- Runs `body` inside one change-history recording, so it is one Ctrl-Z.
 ---
@@ -84,8 +72,22 @@ return function(_context)
 				fail("CONFLICT", "refusing to set Parent directly — use mv, or pass forceParent to override")
 			end
 
+			local current = (instance :: any)[property]
 			local decoded = Value.decode(args.value)
-			local before = Value.encode((instance :: any)[property])
+			local before = Value.encode(current)
+
+			-- What is already in the property says what it will accept, so a
+			-- string that was meant as a Vector3 can be read as one here rather
+			-- than coming back as a type error the caller has to translate.
+			if type(decoded) == "string" and typeof(current) ~= "string" then
+				local read, coerced = pcall(Value.coerce, decoded, current)
+
+				if not read then
+					fail("INVALID_ARGUMENT", `could not set {property}: {tostring(coerced)}`)
+				end
+
+				decoded = coerced
+			end
 
 			recorded(`set {property}`, function()
 				local ok, err = pcall(function()
@@ -128,7 +130,15 @@ return function(_context)
 				if type(args.properties) == "table" then
 					for property, raw in args.properties do
 						local applied, err = pcall(function()
-							(instance :: any)[property] = Value.decode(raw)
+							local value = Value.decode(raw)
+							local current = (instance :: any)[property]
+
+							-- The default sitting in a fresh instance states the
+							-- property's type as well as anything can.
+							if type(value) == "string" and typeof(current) ~= "string" then
+								value = Value.coerce(value, current)
+							end
+							(instance :: any)[property] = value
 						end)
 
 						if not applied then

@@ -16,8 +16,14 @@ local RunService = game:GetService("RunService")
 local MuslimSync = script:FindFirstAncestor("MuslimSync")
 
 local Artifacts = require(MuslimSync.Control.Artifacts)
+local Path = require(MuslimSync.Control.Path)
 
 local CAPTURE_TIMEOUT = 20
+-- A 3/4 view reads as depth rather than as an elevation drawing, and leaving
+-- a quarter of the subject's radius as air keeps it off the frame edge.
+local SUBJECT_DIRECTION = Vector3.new(1, 0.6, 1).Unit
+local SUBJECT_MARGIN = 1.25
+local SETTLE_FRAMES = 2
 local MAX_AXIS = 4096
 local MAX_PIXELS = 16777216
 
@@ -62,6 +68,78 @@ local function screenshot(): string
 	return content :: string
 end
 
+--- The world-space box a subject occupies, whatever kind of instance it is.
+---
+--- A Model knows its own bounds; anything else is measured from the parts under
+--- it, so framing a Folder or an Attachment's parent works the same way.
+local function boundsOf(instance: Instance): (CFrame, Vector3)
+	if instance:IsA("Model") then
+		return instance:GetBoundingBox()
+	end
+
+	if instance:IsA("BasePart") then
+		return instance.CFrame, instance.Size
+	end
+
+	local min: Vector3? = nil
+	local max: Vector3? = nil
+
+	for _, descendant in instance:GetDescendants() do
+		if not descendant:IsA("BasePart") then
+			continue
+		end
+
+		local half = descendant.Size / 2
+		local low = descendant.Position - half
+		local high = descendant.Position + half
+
+		min = if min then (min :: Vector3):Min(low) else low
+		max = if max then (max :: Vector3):Max(high) else high
+	end
+
+	if not min or not max then
+		fail("INVALID_ARGUMENT", `{instance:GetFullName()} has no parts to frame`)
+	end
+
+	local low, high = min :: Vector3, max :: Vector3
+
+	return CFrame.new((low + high) / 2), high - low
+end
+
+--- Points the camera at a subject and returns how to put it back.
+---
+--- The restore is returned rather than done here because the capture in
+--- between can fail, and a tool that leaves the user's camera somewhere else
+--- has broken their editor to take a screenshot.
+local function frameSubject(instance: Instance, margin: number): () -> ()
+	local camera = workspace.CurrentCamera
+
+	if not camera then
+		fail("PLUGIN_ERROR", "there is no current camera to frame with")
+	end
+
+	local center, size = boundsOf(instance)
+	local radius = math.max(size.Magnitude / 2, 0.5)
+
+	-- Fit against the vertical field of view: the viewport is wider than it is
+	-- tall, so height is what actually clips.
+	local distance = radius / math.tan(math.rad(camera.FieldOfView) / 2) * margin
+	local eye = center.Position + SUBJECT_DIRECTION * distance
+	local restore = camera.CFrame
+
+	camera.CFrame = CFrame.lookAt(eye, center.Position)
+
+	-- Give the renderer a moment: capturing the same frame the camera moved on
+	-- can catch the previous view.
+	for _ = 1, SETTLE_FRAMES do
+		RunService.Heartbeat:Wait()
+	end
+
+	return function()
+		camera.CFrame = restore
+	end
+end
+
 local function clampRegion(region: any, size: Vector2)
 	if type(region) ~= "table" then
 		return Vector2.zero, size
@@ -76,6 +154,71 @@ local function clampRegion(region: any, size: Vector2)
 	height = math.clamp(height, 1, size.Y - y)
 
 	return Vector2.new(x, y), Vector2.new(width, height)
+end
+
+--- Takes the frame and uploads it, given a viewport that is already staged.
+---
+--- Split out from the `photo` op so the camera can be restored around it: a
+--- failure in here must not leave the user's camera pointing at the subject.
+local function capture(args, context)
+	local content = screenshot()
+
+	local decoded, image = pcall(function()
+		return AssetService:CreateEditableImageAsync(content :: any)
+	end)
+
+	if not decoded or not image then
+		fail("PLUGIN_ERROR", `could not decode the screenshot: {tostring(image)}`)
+	end
+
+	local editable = image :: EditableImage
+	local full = editable.Size
+
+	if full.X < 1 or full.Y < 1 then
+		editable:Destroy()
+		fail("PLUGIN_ERROR", `the screenshot decoded to {full.X}x{full.Y}`)
+	end
+
+	local origin, size = clampRegion(args.region, full)
+
+	if size.X > MAX_AXIS or size.Y > MAX_AXIS or size.X * size.Y > MAX_PIXELS then
+		editable:Destroy()
+		fail("INVALID_ARGUMENT", `{size.X}x{size.Y} exceeds the capture limits`)
+	end
+
+	-- Read only the requested rectangle. Shipping a whole 4K frame to
+	-- crop it on the other side would be 33 MB over base64 for what is
+	-- often a small subject.
+	local read, pixels = pcall(function()
+		return editable:ReadPixelsBuffer(origin, size)
+	end)
+
+	editable:Destroy()
+
+	if not read then
+		fail("PLUGIN_ERROR", `could not read pixels: {tostring(pixels)}`)
+	end
+
+	local data = pixels :: buffer
+	local expected = size.X * size.Y * 4
+
+	if buffer.len(data) ~= expected then
+		-- The daemon revalidates this too, but failing here names the
+		-- side that actually produced the wrong buffer.
+		fail("PLUGIN_ERROR", `expected {expected} bytes for {size.X}x{size.Y}, got {buffer.len(data)}`)
+	end
+
+	local metadata = Artifacts.upload(context.port(), data, "application/octet-stream")
+
+	return {
+		artifact = metadata.id,
+		width = size.X,
+		height = size.Y,
+		byteLength = buffer.len(data),
+		sha256 = metadata.sha256,
+		viewport = { width = full.X, height = full.Y },
+		region = { x = origin.X, y = origin.Y, width = size.X, height = size.Y },
+	}
 end
 
 return function(context)
@@ -107,70 +250,41 @@ return function(context)
 				fail("PERMISSION_REQUIRED", "CaptureService:CaptureScreenshot is not available in this Studio build")
 			end
 
+			-- Framing happens before the delay so a caller can still stage the
+			-- shot — the subject decides where the camera goes, the delay
+			-- decides when the shutter opens.
+			local restoreCamera: (() -> ())? = nil
+
+			if args.subject ~= nil then
+				local subject = Path.resolveChild(args.subject, "captured")
+				local margin = math.clamp(tonumber(args.margin) or SUBJECT_MARGIN, 1, 8)
+
+				restoreCamera = frameSubject(subject, margin)
+			end
+
 			if tonumber(args.delay) then
 				-- Lets a caller stage the viewport — move the camera, toggle
 				-- UI — before the frame is taken.
 				task.wait(math.clamp(tonumber(args.delay) :: number, 0, 5))
 			end
 
-			local content = screenshot()
-
-			local decoded, image = pcall(function()
-				return AssetService:CreateEditableImageAsync(content :: any)
+			local ok, result = pcall(function()
+				return capture(args, context)
 			end)
 
-			if not decoded or not image then
-				fail("PLUGIN_ERROR", `could not decode the screenshot: {tostring(image)}`)
+			if restoreCamera then
+				restoreCamera()
 			end
 
-			local editable = image :: EditableImage
-			local full = editable.Size
-
-			if full.X < 1 or full.Y < 1 then
-				editable:Destroy()
-				fail("PLUGIN_ERROR", `the screenshot decoded to {full.X}x{full.Y}`)
+			if not ok then
+				error(result, 0)
 			end
 
-			local origin, size = clampRegion(args.region, full)
-
-			if size.X > MAX_AXIS or size.Y > MAX_AXIS or size.X * size.Y > MAX_PIXELS then
-				editable:Destroy()
-				fail("INVALID_ARGUMENT", `{size.X}x{size.Y} exceeds the capture limits`)
+			if args.subject ~= nil then
+				result.subject = tostring(args.subject)
 			end
 
-			-- Read only the requested rectangle. Shipping a whole 4K frame to
-			-- crop it on the other side would be 33 MB over base64 for what is
-			-- often a small subject.
-			local read, pixels = pcall(function()
-				return editable:ReadPixelsBuffer(origin, size)
-			end)
-
-			editable:Destroy()
-
-			if not read then
-				fail("PLUGIN_ERROR", `could not read pixels: {tostring(pixels)}`)
-			end
-
-			local data = pixels :: buffer
-			local expected = size.X * size.Y * 4
-
-			if buffer.len(data) ~= expected then
-				-- The daemon revalidates this too, but failing here names the
-				-- side that actually produced the wrong buffer.
-				fail("PLUGIN_ERROR", `expected {expected} bytes for {size.X}x{size.Y}, got {buffer.len(data)}`)
-			end
-
-			local metadata = Artifacts.upload(context.port(), data, "application/octet-stream")
-
-			return {
-				artifact = metadata.id,
-				width = size.X,
-				height = size.Y,
-				byteLength = buffer.len(data),
-				sha256 = metadata.sha256,
-				viewport = { width = full.X, height = full.Y },
-				region = { x = origin.X, y = origin.Y, width = size.X, height = size.Y },
-			}
+			return result
 		end,
 	}
 end

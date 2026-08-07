@@ -13,6 +13,7 @@ local ChangeHistoryService = game:GetService("ChangeHistoryService")
 
 local MuslimSync = script:FindFirstAncestor("MuslimSync")
 
+local Path = require(MuslimSync.Control.Path)
 local Artifacts = require(MuslimSync.Control.Artifacts)
 local Value = require(MuslimSync.Control.Value)
 
@@ -35,21 +36,7 @@ local function service(name: string)
 end
 
 local function resolve(path: string): Instance
-	local current: Instance = game
-
-	for segment in path:gmatch("[^/]+") do
-		local child = current:FindFirstChild(segment)
-		if not child then
-			fail("NOT_FOUND", `no instance at {path} (stopped at {segment})`)
-		end
-		current = child
-	end
-
-	if current == game then
-		fail("INVALID_ARGUMENT", "the DataModel itself cannot be copied")
-	end
-
-	return current
+	return Path.resolveChild(path, "copied")
 end
 
 --- Drops any root that is a descendant of another root.

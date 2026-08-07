@@ -153,4 +153,115 @@ function Value.decode(value: any): any
 	return decoder(value)
 end
 
+--- Splits "0, 6, 0" into numbers, or nil if any piece is not one.
+local function numbers(text: string): { number }?
+	local parsed = {}
+
+	for piece in text:gmatch("[^,%s]+") do
+		local number = tonumber(piece)
+
+		if not number then
+			return nil
+		end
+
+		table.insert(parsed, number)
+	end
+
+	return if #parsed > 0 then parsed else nil
+end
+
+--- Coercions from what a person types to what a property wants.
+---
+--- Keyed by the type of the value already in the property, because that is the
+--- only reliable statement of what the property will accept — the class
+--- database is not reachable from a plugin.
+local coercions: { [string]: (string, { number }?) -> any } = {
+	Vector3 = function(_, n)
+		return if n and #n == 3 then Vector3.new(n[1], n[2], n[3]) else nil
+	end,
+	Vector2 = function(_, n)
+		return if n and #n == 2 then Vector2.new(n[1], n[2]) else nil
+	end,
+	UDim = function(_, n)
+		return if n and #n == 2 then UDim.new(n[1], n[2]) else nil
+	end,
+	UDim2 = function(_, n)
+		return if n and #n == 4 then UDim2.new(n[1], n[2], n[3], n[4]) else nil
+	end,
+	NumberRange = function(_, n)
+		if n and #n == 1 then
+			return NumberRange.new(n[1])
+		end
+
+		return if n and #n == 2 then NumberRange.new(n[1], n[2]) else nil
+	end,
+	CFrame = function(_, n)
+		if n and #n == 3 then
+			-- Three numbers is a move, not a rotation: keeping the orientation
+			-- is what "put it there" means.
+			return CFrame.new(n[1], n[2], n[3])
+		end
+
+		return if n and #n == 12 then CFrame.new(table.unpack(n)) else nil
+	end,
+	Color3 = function(text, n)
+		local hex = text:match("^#?(%x%x%x%x%x%x)$")
+
+		if hex then
+			return Color3.fromHex(hex)
+		end
+
+		if not n or #n ~= 3 then
+			return nil
+		end
+
+		-- "255,0,0" and "1,0,0" are both things people write. Anything above 1
+		-- can only have meant 0-255, and 0-1 is the Roblox-native range.
+		local scaled = n[1] > 1 or n[2] > 1 or n[3] > 1
+
+		return if scaled then Color3.fromRGB(n[1], n[2], n[3]) else Color3.new(n[1], n[2], n[3])
+	end,
+	BrickColor = function(text)
+		local ok, color = pcall(BrickColor.new, text)
+		return if ok then color else nil
+	end,
+	EnumItem = function(text, _)
+		return text
+	end,
+}
+
+--- Turns a typed string into the type a property already holds.
+---
+--- `msync set Part Position "0,6,0"` is the most ordinary thing to type, and
+--- refusing it because the transport carried a string is the tool being
+--- pedantic about its own internals. Errors name the format that would work.
+function Value.coerce(text: string, current: any): any
+	local kind = typeof(current)
+	local coerce = coercions[kind]
+
+	if not coerce then
+		return text
+	end
+
+	if kind == "EnumItem" then
+		-- Enums resolve by name against the enum already in the property, so
+		-- "Neon" is enough and the full Enum.Material.Neon is not required.
+		for _, item in (current :: EnumItem).EnumType:GetEnumItems() do
+			if item.Name:lower() == text:lower() then
+				return item
+			end
+		end
+
+		error(`{tostring((current :: EnumItem).EnumType)} has no item named "{text}"`)
+	end
+
+	local coerced = coerce(text, numbers(text))
+
+	if coerced == nil then
+		error(`"{text}" is not a {kind}`)
+	end
+
+	return coerced
+end
+
 return Value

@@ -141,10 +141,16 @@ export const COMMANDS = {
     summary: "Capture the Studio viewport as a PNG",
     flags: {
       out: "output file (default ./capture.png)",
+      subject: "path to frame the camera on, e.g. Workspace/Boss",
+      margin: "how much air to leave around the subject (default 1.25)",
       region: "x,y,width,height to crop in the viewport",
       delay: "seconds to wait before the frame is taken",
     },
-    examples: ["msync photo --out shot.png", "msync photo --region 0,0,512,512 --out crop.png"],
+    examples: [
+      "msync photo --out shot.png",
+      "msync photo --subject Workspace/Boss --out boss.png",
+      "msync photo --region 0,0,512,512 --out crop.png",
+    ],
   },
   authorize: {
     op: "capture_authorize",

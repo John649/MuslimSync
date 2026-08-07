@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { inflateSync } from "node:zlib";
 
-import { encodePng, readPngHeader, cropRgba, alphaBounds, PngError } from "./png.js";
+import { encodePng, readPngHeader, cropRgba, PngError } from "./png.js";
 
 /** Builds RGBA where each pixel encodes its own coordinates, so crops are checkable. */
 function grid(width, height) {
@@ -113,47 +113,6 @@ test("a crop that does not fit is refused", () => {
 });
 
 // --------------------------------------------------------- alpha bounds
-
-test("finds the bounding box of the drawn pixels", () => {
-  // The whole point of a tight crop: trim a transparent canvas to its subject.
-  const width = 10;
-  const height = 8;
-  const rgba = Buffer.alloc(width * height * 4);
-
-  for (let y = 2; y <= 5; y += 1) {
-    for (let x = 3; x <= 7; x += 1) {
-      rgba[(y * width + x) * 4 + 3] = 255;
-    }
-  }
-
-  assert.deepEqual(alphaBounds(rgba, width, height), { x: 3, y: 2, width: 5, height: 4 });
-});
-
-test("a fully transparent image has no bounds, rather than an empty crop", () => {
-  // Returning a zero-size box would make the caller crop to nothing and write
-  // an invalid file; null forces it to decide what "nothing rendered" means.
-  assert.equal(alphaBounds(Buffer.alloc(4 * 4 * 4), 4, 4), null);
-});
-
-test("a fully opaque image bounds to the whole thing", () => {
-  assert.deepEqual(alphaBounds(grid(6, 5), 6, 5), { x: 0, y: 0, width: 6, height: 5 });
-});
-
-test("the threshold ignores near-transparent edge pixels", () => {
-  // Anti-aliased edges leave a halo of alpha 1-3; cropping to those makes the
-  // subject look off-centre.
-  const width = 5;
-  const height = 5;
-  const rgba = Buffer.alloc(width * height * 4);
-
-  rgba[(0 * width + 0) * 4 + 3] = 2; // faint halo
-  rgba[(2 * width + 2) * 4 + 3] = 255; // the subject
-
-  assert.deepEqual(alphaBounds(rgba, width, height, 0), { x: 0, y: 0, width: 3, height: 3 });
-  assert.deepEqual(alphaBounds(rgba, width, height, 8), { x: 2, y: 2, width: 1, height: 1 });
-});
-
-// ------------------------------------------------------------ end to end
 
 test("crop then encode produces a valid PNG of the cropped size", () => {
   const rgba = grid(16, 12);

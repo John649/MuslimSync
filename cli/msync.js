@@ -243,6 +243,13 @@ async function main(argv) {
   const port = Number(flags.port ?? process.env.MUSLIMSYNC_PORT ?? DEFAULT_PORT);
 
   if (!command || command === "help") {
+    // `msync help photo` is the form people reach for first, and answering it
+    // with the full index makes the tool look like it has no per-command help.
+    if (positionals[0] && COMMANDS[positionals[0]]) {
+      process.stdout.write(`${commandHelp(positionals[0])}\n`);
+      return EXIT.ok;
+    }
+
     const { commands: custom } = discover({ project: process.cwd(), appRoot: APP_ROOT });
     process.stdout.write(`${help(custom)}\n`);
     return EXIT.ok;

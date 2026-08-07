@@ -9,6 +9,7 @@
 
 local MuslimSync = script:FindFirstAncestor("MuslimSync")
 
+local Path = require(MuslimSync.Control.Path)
 local Value = require(MuslimSync.Control.Value)
 
 -- Bounded so one careless call cannot serialize a whole place into a frame.
@@ -40,30 +41,7 @@ local function fail(code: string, message: string): never
 	error({ code = code, message = message }, 0)
 end
 
---- Resolves a `/`-separated path to one instance, or fails with NOT_FOUND.
-local function resolve(path: string?): Instance
-	local text = if type(path) == "string" then path else ""
-
-	-- Both "" and "/" mean the DataModel; asking for the root should not be a
-	-- special case the caller has to remember.
-	if text == "" or text == "/" then
-		return game
-	end
-
-	local current: Instance = game
-
-	for segment in text:gmatch("[^/]+") do
-		local child = current:FindFirstChild(segment)
-
-		if not child then
-			fail("NOT_FOUND", `no instance at {text} (stopped at {segment})`)
-		end
-
-		current = child
-	end
-
-	return current
-end
+local resolve = Path.resolve
 
 local function describe(instance: Instance)
 	return {
