@@ -147,16 +147,45 @@ export function findByIdentity(projects, { gameId, placeId, argonId }) {
  * Separate from creation so the collision rules are testable without touching
  * the filesystem or spawning argon.
  */
-export function plan(root, { name, dir, folder, gameId }) {
+export function plan(root, { name, dir, folder, gameId, argonId }) {
   const realRoot = resolveWithin(root, "");
   const parent = dir ? resolveWithin(root, dir) : realRoot;
   const base = slugify(folder || name);
 
-  const chosen = uniqueName(base, (candidate) => existsSync(path.join(parent, candidate)), {
+  // An explicit folder name is an instruction, so it is used exactly — whatever
+  // is already there gets adopted. A name derived from the place is a guess,
+  // and a guess must not land on somebody else's project.
+  if (folder) return { parent, folder: base, path: path.join(parent, base) };
+
+  const chosen = uniqueName(base, (candidate) => claimedByAnother(path.join(parent, candidate), { gameId, argonId }), {
     gameId: gameId ? String(gameId) : undefined,
   });
 
   return { parent, folder: chosen, path: path.join(parent, chosen) };
+}
+
+/**
+ * Whether a directory already belongs to a different game.
+ *
+ * A free path or a plain empty folder is adoptable — the common case is a user
+ * who made the folder before pressing Create. A project already bound to
+ * another universe is not: two games both called "Game" must not collide into
+ * one directory.
+ */
+function claimedByAnother(candidatePath, { gameId, argonId }) {
+  if (!existsSync(candidatePath)) return false;
+  if (!isExistingProject(candidatePath)) return false;
+
+  const project = readProjectFile(projectFileIn(candidatePath));
+
+  // Unreadable or unclaimed: leave it alone rather than guess.
+  if (!project) return true;
+  if (project.argonId === undefined && project.gameId === undefined) return false;
+
+  if (argonId) return project.argonId !== argonId;
+  if (gameId) return Number(project.gameId) !== Number(gameId);
+
+  return true;
 }
 
 /**
@@ -184,6 +213,16 @@ export function claim(projectPath, { gameId, placeId, argonId }) {
 
   writeFileSync(file, `${JSON.stringify(project, null, 2)}\n`);
   return file;
+}
+
+/**
+ * Confines a project path the caller supplied to the projects root.
+ *
+ * The plugin normally echoes back a path we handed it in /projects, but a path
+ * from a caller is still a path from a caller.
+ */
+export function resolveProjectPath(root, candidate) {
+  return resolveWithin(root, candidate);
 }
 
 /** True when the directory exists and already looks like a project. */

@@ -8,9 +8,11 @@ local Promise = require(MuslimSync.Packages.Promise)
 local Http = require(MuslimSync.Client.Http)
 local Config = require(MuslimSync.Config)
 
--- The MuslimSync master daemon (`argon master`, installed via launchd).
--- Deliberately obscure port so project serves (8000+) never collide with it
-local MASTER_URL = "http://127.0.0.1:5421"
+-- The MuslimSync daemon, which serves these project endpoints alongside the
+-- control channel. It replaces Argon's separate `argon master` process, so
+-- there is one thing to run rather than two. Project serves live on 8000+ and
+-- never collide with it.
+local MASTER_URL = "http://127.0.0.1:7900"
 
 -- StringValue stored inside the place file that identifies unpublished
 -- places (PlaceId == 0), which have no Roblox identity to match on

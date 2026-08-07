@@ -178,12 +178,31 @@ test("an explicit folder name overrides the place name", () => {
   assert.equal(plan(root, { name: "Race Stars", folder: "custom" }).folder, "custom");
 });
 
-test("a collision falls back to the game id, then a counter", () => {
+test("an empty folder or unclaimed project is adopted, not suffixed", () => {
+  // The common case is a user who made the folder before pressing Create.
   mkdirSync(path.join(root, "Race-Stars"));
+  assert.equal(plan(root, { name: "Race Stars", gameId: 8899 }).folder, "Race-Stars");
+
+  makeProject(path.join(root, "Unclaimed"));
+  assert.equal(plan(root, { name: "Unclaimed", gameId: 8899 }).folder, "Unclaimed");
+});
+
+test("a project claimed by another game is skipped, not hijacked", () => {
+  makeProject(path.join(root, "Race-Stars"), { gameId: 1111 });
   assert.equal(plan(root, { name: "Race Stars", gameId: 8899 }).folder, "Race-Stars-8899");
 
-  mkdirSync(path.join(root, "Race-Stars-8899"));
+  makeProject(path.join(root, "Race-Stars-8899"), { gameId: 2222 });
   assert.equal(plan(root, { name: "Race Stars", gameId: 8899 }).folder, "Race-Stars-2");
+});
+
+test("an unpublished place skips a project claimed by a different argonId", () => {
+  makeProject(path.join(root, "Untitled"), { argonId: "someone-else" });
+  assert.equal(plan(root, { name: "Untitled", argonId: "mine" }).folder, "Untitled-2");
+});
+
+test("an explicit folder is used exactly, however occupied", () => {
+  makeProject(path.join(root, "chosen"), { gameId: 1111 });
+  assert.equal(plan(root, { name: "Race Stars", folder: "chosen", gameId: 8899 }).folder, "chosen");
 });
 
 test("plans inside a chosen subdirectory", () => {

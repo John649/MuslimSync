@@ -13,6 +13,7 @@ import { WebSocketServer } from "ws";
 
 import { decodeFrame, DEFAULT_PORT, ERROR, MAX_FRAME_BYTES, PROTOCOL } from "./protocol.js";
 import { Session } from "./session.js";
+import { handle as handleRoute } from "./routes.js";
 
 const HOST = "127.0.0.1";
 // A socket that connects and then says nothing must not hold a slot forever.
@@ -23,10 +24,13 @@ export class Daemon extends EventEmitter {
   #wss;
   #sessions = new Map();
 
-  constructor({ port = DEFAULT_PORT, host = HOST } = {}) {
+  constructor({ port = DEFAULT_PORT, host = HOST, routes = {} } = {}) {
     super();
     this.port = port;
     this.host = host;
+    // The plugin's project endpoints. Empty in the headless case, where there
+    // is no configured projects root to serve them from.
+    this.routes = routes;
   }
 
   /** Sessions keyed by placeId, newest connection wins. */
@@ -101,7 +105,9 @@ export class Daemon extends EventEmitter {
     this.emit("change", this.status());
   }
 
-  #handleHttp(request, response) {
+  async #handleHttp(request, response) {
+    if (await handleRoute(this.routes, request, response)) return;
+
     if (request.method === "GET" && request.url === "/health") {
       response.writeHead(200, { "content-type": "application/json" });
       response.end(JSON.stringify(this.status()));

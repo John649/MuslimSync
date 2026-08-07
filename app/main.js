@@ -4,6 +4,8 @@ import { fileURLToPath } from "node:url";
 
 import { verseOfTheDay, poolRefs, resolve, dayNumber } from "../quran/daily.js";
 import { Daemon } from "../daemon/index.js";
+import { ArgonProcesses } from "../daemon/argon.js";
+import { createRoutes } from "../daemon/routes.js";
 import { shouldFire, msUntilNextCheck } from "./reminder.js";
 import * as settings from "./settings.js";
 
@@ -12,6 +14,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 let window = null;
 let reminderTimer = null;
 let daemon = null;
+let argon = null;
 // Held separately from daemon.status() so a failed start still has something
 // to show: "port in use" is exactly what the user needs to see.
 let daemonError = null;
@@ -105,8 +108,19 @@ function publishStatus() {
 async function startDaemon() {
   const { controlPort } = settings.read();
 
+  argon = new ArgonProcesses();
+
   try {
-    daemon = new Daemon({ port: controlPort });
+    daemon = new Daemon({
+      port: controlPort,
+      // The plugin's project endpoints. Reading the root per request rather
+      // than capturing it means changing it in Settings takes effect at once.
+      routes: createRoutes({
+        projectsRoot: () => settings.read().projectsRoot,
+        argon,
+        log: (entry) => console.log(`[plugin ${entry.level}] ${entry.source}: ${entry.message}`),
+      }),
+    });
     daemon.on("change", publishStatus);
     // A plugin we cannot parse is worth surfacing rather than swallowing: it
     // almost always means a version mismatch between app and plugin.
@@ -191,6 +205,10 @@ app.on("before-quit", async (event) => {
 
   const closing = daemon;
   daemon = null;
+
+  // Every argon serve we started is ours to clean up; leaving them running
+  // would hold their ports and keep syncing with nothing watching.
+  argon?.stopAll();
   await closing.stop();
   app.quit();
 });
