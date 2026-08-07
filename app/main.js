@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Notification, powerMonitor, shell, clipboard } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Notification, powerMonitor, shell, clipboard } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -21,6 +21,17 @@ let artifacts = null;
 // Held separately from daemon.status() so a failed start still has something
 // to show: "port in use" is exactly what the user needs to see.
 let daemonError = null;
+
+// A bounded feed for the Activity view. Bounded because it runs for as long as
+// the app does, and an unbounded array is a slow leak.
+const MAX_ACTIVITY = 200;
+const activity = [];
+
+function record(kind, message) {
+  activity.push({ at: Date.now(), kind, message });
+  if (activity.length > MAX_ACTIVITY) activity.shift();
+  window?.webContents.send("activity:changed");
+}
 
 function createWindow() {
   window = new BrowserWindow({
@@ -129,14 +140,29 @@ async function startDaemon() {
         projectsRoot: () => settings.read().projectsRoot,
         argon,
         artifacts,
-        log: (entry) => console.log(`[plugin ${entry.level}] ${entry.source}: ${entry.message}`),
+        log: (entry) => {
+          console.log(`[plugin ${entry.level}] ${entry.source}: ${entry.message}`);
+          record(entry.level, `${entry.source}: ${entry.message}`);
+        },
       }),
     });
     daemon.on("change", publishStatus);
+
+    daemon.on("op", (event) => {
+      const detail = event.ok
+        ? event.note ?? `${event.ms}ms`
+        : event.error;
+      record(event.ok ? "op" : "error", `${event.op} — ${detail}`);
+    });
+
+    daemon.on("plugin-event", (event) => {
+      record(event.kind, typeof event.payload?.message === "string" ? event.payload.message : event.kind);
+    });
     // A plugin we cannot parse is worth surfacing rather than swallowing: it
     // almost always means a version mismatch between app and plugin.
     daemon.on("protocol-error", (error) => {
       daemonError = `plugin protocol error: ${error.message}`;
+      record("error", error.message);
       publishStatus();
     });
 
@@ -157,9 +183,69 @@ async function startDaemon() {
 
 ipcMain.handle("daemon:status", () => daemonStatus());
 
+ipcMain.handle("activity:list", () => [...activity].reverse());
+
 ipcMain.handle("projects:list", () => {
   const { projectsRoot } = settings.read();
   return { root: projectsRoot, projects: projects.list(projectsRoot, { running: argon?.running ?? new Map() }) };
+});
+
+// Both folder buttons end at the same place — a projects root that gets
+// scanned. "Add existing" differs only in that it takes the project itself and
+// adopts its parent, because pointing at a project and getting an empty list is
+// the mistake this app should absorb rather than report.
+async function pickDirectory(title) {
+  const result = await dialog.showOpenDialog(window, {
+    title,
+    properties: ["openDirectory", "createDirectory"],
+    defaultPath: settings.read().projectsRoot,
+  });
+
+  return result.canceled ? null : result.filePaths[0];
+}
+
+ipcMain.handle("projects:chooseRoot", async () => {
+  const directory = await pickDirectory("Choose a projects folder");
+  if (!directory) return { ok: false, cancelled: true };
+
+  settings.update({ projectsRoot: directory });
+  publishStatus();
+
+  return { ok: true, root: directory };
+});
+
+ipcMain.handle("projects:addExisting", async () => {
+  const directory = await pickDirectory("Choose an existing project");
+  if (!directory) return { ok: false, cancelled: true };
+
+  if (!projects.isExistingProject(directory)) {
+    return { ok: false, error: `${path.basename(directory)} has no .project.json in it` };
+  }
+
+  const root = projects.rootFor(directory);
+  settings.update({ projectsRoot: root });
+  publishStatus();
+
+  return { ok: true, root };
+});
+
+ipcMain.handle("conflicts:list", async () => {
+  const running = [...(argon?.running ?? new Map()).entries()];
+
+  // Argon owns conflict state; this reads it rather than keeping a second
+  // copy that could disagree with the thing actually syncing.
+  const results = await Promise.all(
+    running.map(async ([projectPath, session]) => {
+      try {
+        const response = await fetch(`http://${session.host}:${session.port}/details`, { signal: AbortSignal.timeout(2000) });
+        return { path: projectPath, reachable: response.ok, port: session.port };
+      } catch {
+        return { path: projectPath, reachable: false, port: session.port };
+      }
+    }),
+  );
+
+  return results;
 });
 
 ipcMain.handle("verse:today", () => {

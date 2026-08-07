@@ -152,15 +152,16 @@
                 Studio plugin and it shows up here automatically.
               </p>
               <div class="hero-actions">
-                <button class="button is-primary" type="button" disabled>Choose folder</button>
-                <button class="button" type="button" disabled>Add existing</button>
+                <button class="button is-primary" type="button" id="choose-root">Choose folder</button>
+                <button class="button" type="button" id="add-existing">Add existing</button>
               </div>
-              <span class="stage">Milestone 3</span>
+              <span class="stage" id="projects-root"></span>
             </div>
           </section>
 
           <section class="page is-hidden" id="view-activity" data-note="Live sync events from the connected plugin">
-            <div class="hero">
+            <ul class="feed is-hidden" id="activity-list"></ul>
+            <div class="hero" id="activity-empty">
               <span class="hero-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M2 12.5h4L9 6l4.5 12L17 12.5h5" />
@@ -173,7 +174,8 @@
           </section>
 
           <section class="page is-hidden" id="view-conflicts" data-note="Two-way edits that need a decision">
-            <div class="hero">
+            <ul class="projects is-hidden" id="conflict-list"></ul>
+            <div class="hero" id="conflicts-empty">
               <span class="hero-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round">
                   <path d="M12 3 2.5 20h19L12 3z" />

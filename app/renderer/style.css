@@ -851,6 +851,55 @@ strong {
   font-size: 12px;
 }
 
+/* -------------------------------------------------------- activity feed */
+
+.feed {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.feed-row {
+  display: flex;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+}
+
+.feed-row:nth-child(odd) {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.feed-at {
+  flex: 0 0 auto;
+  color: var(--faint);
+}
+
+.feed-kind {
+  flex: 0 0 52px;
+  color: var(--channel);
+  text-transform: uppercase;
+}
+
+.feed-row.is-warn .feed-kind {
+  color: var(--warn);
+}
+.feed-row.is-error .feed-kind {
+  color: var(--danger);
+}
+
+.feed-message {
+  flex: 1;
+  min-width: 0;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
 /* ------------------------------------------------------------- utilities */
 
 /* Last in the file on purpose. `.is-hidden` and a component rule like `.hero`

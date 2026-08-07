@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, realpathSy
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { browse, mkdir, list, findByIdentity, plan, claim, projectFileIn, isExistingProject } from "./projects.js";
+import { browse, mkdir, list, findByIdentity, plan, claim, projectFileIn, isExistingProject, rootFor } from "./projects.js";
 import { PathEscape } from "./paths.js";
 
 let root;
@@ -287,4 +287,31 @@ test("a symlinked root is resolved, not refused", () => {
   symlinkSync(real, link);
 
   assert.deepEqual(list(link).map((project) => project.name), ["game"]);
+});
+
+// ------------------------------------------------------------- rootFor
+
+test("picking a project adopts its parent as the root", () => {
+  // Otherwise the user points at their project and gets an empty list, because
+  // the root is scanned one level deep.
+  const project = path.join(root, "my-game");
+  makeProject(project);
+
+  assert.equal(rootFor(project), root);
+});
+
+test("picking a plain folder takes it at face value", () => {
+  const folder = path.join(root, "somewhere");
+  mkdirSync(folder, { recursive: true });
+
+  assert.equal(rootFor(folder), folder);
+});
+
+test("a folder that merely contains projects stays the root", () => {
+  // The containing folder is not itself a project, so it must not be walked up
+  // past — that would show the user a level above what they picked.
+  makeProject(path.join(root, "a"));
+  makeProject(path.join(root, "b"));
+
+  assert.equal(rootFor(root), root);
 });

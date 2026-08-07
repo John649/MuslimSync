@@ -18,6 +18,9 @@ const el = {
   rail: document.getElementById("rail-projects"),
   projectList: document.getElementById("project-list"),
   projectsEmpty: document.getElementById("projects-empty"),
+  projectsRoot: document.getElementById("projects-root"),
+  chooseRoot: document.getElementById("choose-root"),
+  addExisting: document.getElementById("add-existing"),
 };
 
 // Captured before any swap so the icon can be restored exactly.
@@ -135,8 +138,9 @@ api.daemon.status().then(renderStatus);
 
 // Built with DOM calls, not an HTML string: project names and paths come off
 // the user's disk and are not ours to treat as markup.
-function renderProjects({ projects }) {
+function renderProjects({ projects, root }) {
   el.projectList.replaceChildren();
+  el.projectsRoot.textContent = root;
 
   const any = projects.length > 0;
   el.projectList.classList.toggle("is-hidden", !any);
@@ -172,8 +176,113 @@ function renderProjects({ projects }) {
 
 const loadProjects = () => api.projects.list().then(renderProjects);
 
+// A cancelled dialog leaves the view exactly as it was; only a real refusal
+// gets shown, and only until the next attempt so it cannot go stale.
+function folderPicker(button, pick) {
+  button.addEventListener("click", async () => {
+    button.disabled = true;
+
+    try {
+      const result = await pick();
+      if (result.error) el.projectsRoot.textContent = result.error;
+      else if (result.ok) await loadProjects();
+    } finally {
+      button.disabled = false;
+    }
+  });
+}
+
+folderPicker(el.chooseRoot, () => api.projects.chooseRoot());
+folderPicker(el.addExisting, () => api.projects.addExisting());
+
 api.projects.onChange(loadProjects);
 loadProjects();
+
+// ------------------------------------------------------------- activity
+
+const feed = {
+  list: document.getElementById("activity-list"),
+  empty: document.getElementById("activity-empty"),
+};
+
+const clock = (at) => new Date(at).toLocaleTimeString(undefined, { hour12: false });
+
+function renderActivity(entries) {
+  feed.list.replaceChildren();
+
+  const any = entries.length > 0;
+  feed.list.classList.toggle("is-hidden", !any);
+  feed.empty.classList.toggle("is-hidden", any);
+
+  for (const entry of entries) {
+    const row = document.createElement("li");
+    row.className = `feed-row is-${entry.kind}`;
+
+    for (const [cls, text] of [
+      ["feed-at", clock(entry.at)],
+      ["feed-kind", entry.kind],
+      ["feed-message", entry.message],
+    ]) {
+      const cell = document.createElement("span");
+      cell.className = cls;
+      // Plugin messages are text from another process, never markup.
+      cell.textContent = text;
+      row.append(cell);
+    }
+
+    feed.list.append(row);
+  }
+}
+
+const loadActivity = () => api.activity.list().then(renderActivity);
+api.activity.onChange(loadActivity);
+loadActivity();
+
+// ------------------------------------------------------------- conflicts
+
+const conflicts = {
+  list: document.getElementById("conflict-list"),
+  empty: document.getElementById("conflicts-empty"),
+};
+
+function renderConflicts(rows) {
+  conflicts.list.replaceChildren();
+
+  // Only unreachable servers are worth showing: a reachable one has nothing
+  // wrong with it, and listing every healthy project as a "conflict" would
+  // train the user to ignore this view.
+  const troubled = rows.filter((row) => !row.reachable);
+
+  conflicts.list.classList.toggle("is-hidden", troubled.length === 0);
+  conflicts.empty.classList.toggle("is-hidden", troubled.length > 0);
+
+  for (const row of troubled) {
+    const item = document.createElement("li");
+    item.className = "project";
+
+    const dot = document.createElement("span");
+    dot.className = "project-dot";
+
+    const copy = document.createElement("span");
+    copy.className = "project-copy";
+
+    const name = document.createElement("span");
+    name.className = "project-name";
+    name.textContent = row.path.split("/").pop();
+
+    const meta = document.createElement("span");
+    meta.className = "project-meta";
+    meta.textContent = `sync server on ${row.port} is not responding`;
+
+    copy.append(name, meta);
+    item.append(dot, copy);
+    conflicts.list.append(item);
+  }
+}
+
+const loadConflicts = () => api.conflicts.list().then(renderConflicts);
+api.daemon.onChange(loadConflicts);
+loadConflicts();
 
 // ------------------------------------------------------------ navigation
 

@@ -24,9 +24,20 @@ contextBridge.exposeInMainWorld("muslimsync", {
   },
   projects: {
     list: () => ipcRenderer.invoke("projects:list"),
+    chooseRoot: () => ipcRenderer.invoke("projects:chooseRoot"),
+    addExisting: () => ipcRenderer.invoke("projects:addExisting"),
     onChange: (handler) => {
       ipcRenderer.on("projects:changed", () => handler());
     },
+  },
+  activity: {
+    list: () => ipcRenderer.invoke("activity:list"),
+    onChange: (handler) => {
+      ipcRenderer.on("activity:changed", () => handler());
+    },
+  },
+  conflicts: {
+    list: () => ipcRenderer.invoke("conflicts:list"),
   },
   settings: {
     get: () => ipcRenderer.invoke("settings:get"),

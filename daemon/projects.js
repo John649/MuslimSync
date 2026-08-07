@@ -225,6 +225,18 @@ export function resolveProjectPath(root, candidate) {
   return resolveWithin(root, candidate);
 }
 
+/**
+ * The projects root implied by a directory the user picked.
+ *
+ * Picking a project itself and getting an empty list is the mistake worth
+ * absorbing: the list scans one root, so adopting the project's parent shows
+ * the thing they pointed at. A folder that is not a project is taken at face
+ * value and becomes the root as picked.
+ */
+export function rootFor(directory) {
+  return isExistingProject(directory) ? path.dirname(directory) : directory;
+}
+
 /** True when the directory exists and already looks like a project. */
 export function isExistingProject(directory) {
   try {

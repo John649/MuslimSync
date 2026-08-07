@@ -167,6 +167,14 @@ function Control:connect(): boolean
 	end)
 
 	stream.Closed:Connect(function()
+		-- Only the current stream may tear down the connection. A previous
+		-- socket's Closed can arrive after the reconnect has already opened a
+		-- new one, and clearing it there would drop a live connection and send
+		-- the retry loop into a spin.
+		if self.stream ~= stream then
+			return
+		end
+
 		self.connected = false
 		self.stream = nil
 		Log.trace("Control: disconnected")

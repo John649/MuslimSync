@@ -182,6 +182,8 @@ export class Daemon extends EventEmitter {
     }
 
     try {
+      const startedAt = Date.now();
+
       const value = await this.request(call.op, args, {
         placeId: call.placeId,
         timeoutMs: Number.isFinite(call.timeoutMs) ? call.timeoutMs : undefined,
@@ -189,8 +191,13 @@ export class Daemon extends EventEmitter {
 
       if (call.op === "clipboard_copy" && value?.artifact) this.#clipboard = value.artifact;
 
+      // Every served op is emitted, which is what makes an activity view worth
+      // opening: without it the feed only fills up when something goes wrong.
+      this.emit("op", { op: call.op, ok: true, ms: Date.now() - startedAt });
+
       reply(200, { ok: true, value });
     } catch (cause) {
+      this.emit("op", { op: call.op, ok: false, error: cause.message });
       // The plugin's own error codes reach the caller intact — the CLI branches
       // on them, so translating here would lose the distinction between
       // "not connected" and "the plugin said no".
@@ -265,6 +272,8 @@ export class Daemon extends EventEmitter {
   }
 
   #register(hello, socket) {
+    this.emit("op", { op: "connect", ok: true, note: hello.placeName ?? `place ${hello.placeId}` });
+
     // Sessions are keyed by a connection id, not by placeId. Every unpublished
     // place reports placeId 0, so keying on it meant two scratch places open at
     // once collapsed into one session and fought over it — found by opening a
