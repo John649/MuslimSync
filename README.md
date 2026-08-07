@@ -32,14 +32,17 @@ Then open a place in Studio. The plugin connects to the daemon on port 7900, and
 `msync` starts answering.
 
 ```bash
-node cli/msync.js status
+npm link          # puts `msync` on your PATH
+msync status
 ```
 
-Symlink it onto your PATH if you want the short form:
+`npm link` is what makes every `msync ...` in this README work; without it the
+long form is `node cli/msync.js status`. `npm unlink -g muslimsync` undoes it.
 
-```bash
-ln -s "$PWD/cli/msync.js" /usr/local/bin/msync
-```
+The Luau formatter and linter are pinned in `aftman.toml` and fetched by
+[Aftman](https://github.com/LPGhatguy/aftman) — `aftman install` once, and
+`stylua`/`selene` resolve to the versions this repo expects rather than whatever
+is on your machine.
 
 ## What it does
 

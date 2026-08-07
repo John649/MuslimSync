@@ -150,6 +150,8 @@ const REPO = `## Working on this repo
 npm run check                     # tests, plugin lint, file-size gate, this file's drift gate
 npm run build:plugin -- --install # build the plugin into Studio's plugins folder
 npm run gen:agents                # regenerate the tool section below
+npm link                          # puts \`msync\` on PATH; without it, node cli/msync.js
+aftman install                    # stylua and selene at the versions aftman.toml pins
 \`\`\`
 
 **Run \`npm run check\` before committing, not after.** It has caught a red gate

@@ -256,3 +256,30 @@ export function isExistingProject(directory) {
     return false;
   }
 }
+
+/**
+ * Renames a project, in its own file.
+ *
+ * The folder is left alone on purpose: it is what argon serves, what git
+ * tracks, and what the plugin claimed. Renaming it would break all three to
+ * change a label.
+ */
+export function rename(projectPath, name) {
+  const trimmed = String(name ?? "").trim();
+
+  if (!trimmed) throw new Error("a project needs a name");
+  if (trimmed.length > 100) throw new Error("that name is too long");
+
+  const file = projectFileIn(projectPath);
+  if (!file) throw new Error(`no project file in ${projectPath}`);
+
+  const full = path.join(projectPath, file);
+  const project = JSON.parse(readFileSync(full, "utf8"));
+
+  if (project.name === trimmed) return { path: projectPath, name: trimmed, changed: false };
+
+  project.name = trimmed;
+  writeFileSync(full, `${JSON.stringify(project, null, 2)}\n`);
+
+  return { path: projectPath, name: trimmed, changed: true };
+}

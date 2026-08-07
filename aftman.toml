@@ -1,0 +1,15 @@
+# Toolchain for the whole checkout.
+#
+# plugin/aftman.toml already declared these, which is why `npm run lint:plugin`
+# worked — it cds into plugin/ first. Anything run from the repo root got
+# "Tried to run an Aftman-managed version of stylua, but no aftman.toml files
+# list this tool" instead, which reads like a broken install rather than a
+# missing manifest.
+#
+# Same versions as plugin/aftman.toml on purpose: two manifests that drift are
+# worse than one that is duplicated.
+
+[tools]
+stylua = "JohnnyMorganz/stylua@2.1.0"
+selene = "Kampfkarren/selene@0.28.0"
+argon = "argon-rbx/argon@2.0.24"
