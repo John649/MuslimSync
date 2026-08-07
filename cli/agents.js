@@ -20,7 +20,7 @@ import { COMMANDS, GROUPS } from "./commands.js";
 // What almost every task needs. The rest is indexed instead of listed, because
 // a brief that spells out screen capture for an agent renaming a part has spent
 // the tokens either way.
-const CORE = ["Navigate", "Write", "Studio"];
+const CORE = ["Navigate", "Write", "Studio", "Transfer"];
 
 const PREAMBLE = `# MuslimSync
 
@@ -70,6 +70,31 @@ A folder with a \`command.json\` and one of \`run.js\`, \`run.luau\`, or
 \`workflow.json\` becomes a CLI verb, an app button, and a registry entry at
 once. Put it in \`<project>/.muslimsync/commands/\` to scope it to one project.
 See \`commands/\` for one of each kind.
+`;
+
+const TRANSFER = `## Taking something from another game
+
+The clipboard lives in the daemon, not in Studio, so it survives switching
+places. That is what makes "add the quest system from my other game" a real
+workflow rather than a rebuild:
+
+1. Open the source place in Studio. \`msync copy ServerScriptService/QuestSystem\`
+   — several paths at once also work, and \`msync copy\` with no path takes
+   whatever is selected in Studio.
+2. Open the destination place. Nothing needs re-copying; the clipboard is still
+   holding it.
+3. \`msync paste ServerScriptService\`.
+
+It is a real .rbxm round-trip through SerializationService, so what lands is the
+exact instances — scripts with their source, properties, and everything nested
+inside them — not something rebuilt from a description. Copying a parent and one
+of its children inserts that child once, not twice.
+
+The clipboard is in memory: restarting the app empties it. Copy, switch, paste.
+
+**Reach for this before rebuilding anything by hand.** If the user wants a
+system that already exists in another place of theirs, copying it is both exact
+and faster than recreating it with \`new\` and \`set\`.
 `;
 
 const PLAYTESTS = `## Playtests
@@ -239,6 +264,8 @@ export function renderAgentsMd({ groups, repo = false } = {}) {
     omitted.length ? index(byGroup, omitted) : null,
     omitted.length ? "" : null,
     CONVENTIONS,
+    // Only when the commands are in scope, same rule as the playtest prose.
+    shown.includes("Transfer") ? TRANSFER : null,
     // Only when playtests are in scope. Explaining the verdict convention to an
     // agent that cannot run one is the clearest case of paying for context
     // that will never be used.

@@ -77,7 +77,7 @@ test("it stays short enough to inject", () => {
   // It goes into a context window. Flags and examples live in `msync help`,
   // which an agent can call when it actually needs them.
   const markdown = renderAgentsMd();
-  assert.ok(markdown.length < 6000, `AGENTS.md is ${markdown.length} chars; keep it under 6000`);
+  assert.ok(markdown.length < 7000, `AGENTS.md is ${markdown.length} chars; keep it under 7000`);
 });
 
 // ------------------------------------------------- installing into a project
@@ -158,4 +158,19 @@ test("headings keep the blank line under them", () => {
 
 test("the installed section keeps them too", () => {
   assert.match(renderSection(), /### Commands\n\n#### /);
+});
+
+test("the cross-place workflow ships whenever copy and paste do", () => {
+  // "Copy instances to the cross-project clipboard" does not tell an agent that
+  // the clipboard survives switching places, which is the entire reason the
+  // command exists. A summary line cannot carry a workflow.
+  const markdown = renderAgentsMd();
+
+  assert.match(markdown, /Taking something from another game/);
+  assert.match(markdown, /survives switching\nplaces/);
+});
+
+test("that workflow is dropped when transfer is out of scope", () => {
+  const narrow = renderAgentsMd({ groups: ["Navigate"] });
+  assert.ok(!narrow.includes("Taking something from another game"));
 });

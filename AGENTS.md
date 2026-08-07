@@ -76,6 +76,13 @@ twice in this project's history, both times after the commit had already landed.
 | `redo` | Redo the last undone change |
 | `ping` | Round-trip the plugin and report latency |
 
+### Transfer
+
+| Command | Does |
+| --- | --- |
+| `copy [paths...]` | Copy instances to the cross-project clipboard |
+| `paste [to]` | Paste the clipboard into the connected place |
+
 ### Also available
 
 Not spelled out here. `msync help <group>` lists any of these in full.
@@ -84,7 +91,6 @@ Not spelled out here. `msync help <group>` lists any of these in full.
 | --- | --- |
 | Capture | `photo`, `authorize` |
 | Playtest | `playtest`, `playing`, `stop`, `run`, `test` |
-| Transfer | `copy`, `paste` |
 | Info | `capabilities`, `status`, `projects`, `commands`, `doctor`, `help`, `agents` |
 | Deen | `verse` |
 
@@ -126,6 +132,30 @@ A folder with a `command.json` and one of `run.js`, `run.luau`, or
 `workflow.json` becomes a CLI verb, an app button, and a registry entry at
 once. Put it in `<project>/.muslimsync/commands/` to scope it to one project.
 See `commands/` for one of each kind.
+
+## Taking something from another game
+
+The clipboard lives in the daemon, not in Studio, so it survives switching
+places. That is what makes "add the quest system from my other game" a real
+workflow rather than a rebuild:
+
+1. Open the source place in Studio. `msync copy ServerScriptService/QuestSystem`
+   — several paths at once also work, and `msync copy` with no path takes
+   whatever is selected in Studio.
+2. Open the destination place. Nothing needs re-copying; the clipboard is still
+   holding it.
+3. `msync paste ServerScriptService`.
+
+It is a real .rbxm round-trip through SerializationService, so what lands is the
+exact instances — scripts with their source, properties, and everything nested
+inside them — not something rebuilt from a description. Copying a parent and one
+of its children inserts that child once, not twice.
+
+The clipboard is in memory: restarting the app empties it. Copy, switch, paste.
+
+**Reach for this before rebuilding anything by hand.** If the user wants a
+system that already exists in another place of theirs, copying it is both exact
+and faster than recreating it with `new` and `set`.
 
 ## Getting more detail
 
