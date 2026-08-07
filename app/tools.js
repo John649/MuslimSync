@@ -35,7 +35,7 @@ async function writeCapture(store, into, result, options) {
   let pixels = Buffer.concat(parts);
   let { width, height } = result;
 
-  if (result.isolated && options.tight !== false) {
+  if (result.isolated && !result.cropped && options.tight !== false) {
     // Matched to the plugin's noise floor: a pixel the renderer already called
     // transparent must not drag the crop out to the frame edge.
     const bounds = alphaBounds(pixels, width, height, 4);

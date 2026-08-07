@@ -142,7 +142,7 @@ async function writePhoto(port, result, flags) {
   // An isolated render fills the viewport with mostly-empty frame, and the
   // interesting part is exactly the pixels that got drawn. Cropping to the
   // alpha is the difference between a 1392x1162 file and the subject.
-  if (result.isolated && flags.tight !== false && flags.tight !== "false") {
+  if (result.isolated && !result.cropped && flags.tight !== false && flags.tight !== "false") {
     // Matched to the plugin's noise floor: a pixel the renderer already called
     // transparent must not drag the crop out to the frame edge.
     const bounds = alphaBounds(pixels, width, height, 4);

@@ -314,9 +314,12 @@ return function(context)
 					byteLength = buffer.len(rendered.pixels),
 					sha256 = metadata.sha256,
 					isolated = true,
+					-- Already cropped to the drawn pixels, so the far side must
+					-- not crop again.
+					cropped = true,
 					subject = tostring(args.subject),
-					viewport = { width = rendered.size.X, height = rendered.size.Y },
-					region = { x = 0, y = 0, width = rendered.size.X, height = rendered.size.Y },
+					viewport = { width = rendered.viewport.X, height = rendered.viewport.Y },
+					region = rendered.region,
 				}
 			end
 

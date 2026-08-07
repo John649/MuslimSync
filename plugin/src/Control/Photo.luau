@@ -196,6 +196,58 @@ function Photo.solve(dark: buffer, light: buffer, bgDark: buffer, bgLight: buffe
 	return out
 end
 
+--- The box around every pixel with alpha above the noise floor.
+---
+--- Computed here rather than on the far side so only the subject crosses the
+--- wire: an isolated render fills the viewport but the subject is a fraction of
+--- it, and shipping the empty frame to discard it was 60% of the transfer.
+function Photo.bounds(
+	pixels: buffer,
+	width: number,
+	height: number
+): { x: number, y: number, width: number, height: number }?
+	local minX, minY = width, height
+	local maxX, maxY = -1, -1
+
+	for y = 0, height - 1 do
+		for x = 0, width - 1 do
+			if buffer.readu8(pixels, (y * width + x) * 4 + 3) > 0 then
+				if x < minX then
+					minX = x
+				end
+				if x > maxX then
+					maxX = x
+				end
+				if y < minY then
+					minY = y
+				end
+				if y > maxY then
+					maxY = y
+				end
+			end
+		end
+	end
+
+	if maxX < 0 then
+		return nil
+	end
+
+	return { x = minX, y = minY, width = maxX - minX + 1, height = maxY - minY + 1 }
+end
+
+--- Copies one rectangle out of an RGBA buffer, row by row.
+function Photo.crop(pixels: buffer, width: number, box: { x: number, y: number, width: number, height: number }): buffer
+	local out = buffer.create(box.width * box.height * 4)
+	local rowBytes = box.width * 4
+
+	for row = 0, box.height - 1 do
+		local from = ((box.y + row) * width + box.x) * 4
+		buffer.copy(out, row * rowBytes, pixels, from, rowBytes)
+	end
+
+	return out
+end
+
 --- Renders one instance on a transparent background.
 ---
 --- `capture` takes a frame and hands back RGBA8 for the whole viewport; it is
@@ -275,9 +327,20 @@ function Photo.isolate(instance: Instance, options: { margin: number?, capture: 
 			fail("PLUGIN_ERROR", "the calibration and subject passes came back at different sizes")
 		end
 
+		local solved = Photo.solve(dark, light, bgDark, bgLight, size.X * size.Y)
+		local box = Photo.bounds(solved, size.X, size.Y)
+
+		if not box then
+			fail("PLUGIN_ERROR", "the render came back completely transparent — nothing was drawn")
+		end
+
+		local tight = box :: { x: number, y: number, width: number, height: number }
+
 		return {
-			pixels = Photo.solve(dark, light, bgDark, bgLight, size.X * size.Y),
-			size = size,
+			pixels = Photo.crop(solved, size.X, tight),
+			size = Vector2.new(tight.width, tight.height),
+			viewport = size,
+			region = tight,
 		}
 	end)
 
