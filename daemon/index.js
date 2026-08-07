@@ -175,7 +175,10 @@ export class Daemon extends EventEmitter {
     }
 
     try {
-      const value = await this.request(call.op, args, { placeId: call.placeId });
+      const value = await this.request(call.op, args, {
+        placeId: call.placeId,
+        timeoutMs: Number.isFinite(call.timeoutMs) ? call.timeoutMs : undefined,
+      });
 
       if (call.op === "clipboard_copy" && value?.artifact) this.#clipboard = value.artifact;
 

@@ -163,6 +163,15 @@ export function render(command, result) {
         ...result.roots.map((r) => `  ${r.path} ${dim(r.class)}`),
       ].join("\n");
 
+    case "photo":
+      return [
+        `${green("captured")} ${result.width}x${result.height} ${dim(`(viewport ${result.viewport.width}x${result.viewport.height})`)}`,
+        `${dim("written to")} ${result.file}`,
+      ].join("\n");
+
+    case "authorize":
+      return `${green("authorized")} ${dim("screen capture is available")}`;
+
     case "capabilities":
       return [
         `plugin ${bold(result.pluginVersion)}  protocol ${result.protocolVersion}`,

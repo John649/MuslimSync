@@ -125,6 +125,26 @@ export const COMMANDS = {
   save: { op: "save", group: "Studio", summary: "Ask Studio to save the place" },
   ping: { op: "ping", group: "Studio", summary: "Round-trip the plugin and report latency" },
 
+  // -------------------------------------------------------------- capture
+  photo: {
+    op: "photo",
+    group: "Capture",
+    timeoutMs: 120000,
+    summary: "Capture the Studio viewport as a PNG",
+    flags: {
+      out: "output file (default ./capture.png)",
+      region: "x,y,width,height to crop in the viewport",
+      delay: "seconds to wait before the frame is taken",
+    },
+    examples: ["msync photo --out shot.png", "msync photo --region 0,0,512,512 --out crop.png"],
+  },
+  authorize: {
+    op: "capture_authorize",
+    group: "Capture",
+    timeoutMs: 60000,
+    summary: "Ask Studio for screen capture permission",
+  },
+
   // ------------------------------------------------------------- transfer
   copy: {
     op: "clipboard_copy",
@@ -151,7 +171,7 @@ export const COMMANDS = {
 };
 
 /** Groups, in the order help should print them. */
-export const GROUPS = ["Navigate", "Write", "Studio", "Transfer", "Info", "Deen"];
+export const GROUPS = ["Navigate", "Write", "Studio", "Capture", "Transfer", "Info", "Deen"];
 
 /** The registry an agent reads. Derived, never hand-maintained. */
 export function registry() {

@@ -8,6 +8,8 @@
 import { parse, bind, coerce, UsageError } from "./args.js";
 import { COMMANDS, registry } from "./commands.js";
 import { render, help, commandHelp, red, dim } from "./format.js";
+import { writeFileSync } from "node:fs";
+import path from "node:path";
 
 const DEFAULT_PORT = 7900;
 
@@ -120,12 +122,64 @@ async function local(name, { flags, port }) {
   }
 }
 
+/** Reads a capture artifact, encodes it, and writes the file. */
+async function writePhoto(port, result, flags) {
+  const { encodePng } = await import("../daemon/png.js");
+  const { decode, encode } = await import("@msgpack/msgpack");
+
+  const parts = [];
+  let offset = 0;
+
+  // Paged, because a full viewport is tens of megabytes and the daemon caps
+  // each read.
+  for (;;) {
+    const response = await fetch(`http://127.0.0.1:${port}/artifacts/read`, {
+      method: "POST",
+      body: Buffer.from(encode({ id: result.artifact, offset })),
+    });
+
+    const page = decode(new Uint8Array(await response.arrayBuffer()));
+
+    if (page.error) throw new Fatal(EXIT.pluginError, `could not read the capture: ${page.error}`);
+
+    parts.push(Buffer.from(page.dataBase64, "base64"));
+    offset = page.nextOffset;
+
+    if (page.eof) break;
+  }
+
+  const rgba = Buffer.concat(parts);
+
+  if (rgba.length !== result.byteLength) {
+    throw new Fatal(EXIT.pluginError, `capture truncated: expected ${result.byteLength} bytes, got ${rgba.length}`);
+  }
+
+  const file = path.resolve(String(flags.out ?? "capture.png"));
+  writeFileSync(file, encodePng(rgba, result.width, result.height));
+
+  return file;
+}
+
 /** Turns positionals and flags into the op's argument object. */
 function opArguments(name, spec, positionals, flags) {
   const { raw, port, help: wantsHelp, ...rest } = flags;
   void raw;
   void port;
   void wantsHelp;
+
+  if (name === "photo" && typeof rest.region === "string") {
+    const numbers = rest.region.split(",").map((part) => Number(part.trim()));
+
+    if (numbers.length !== 4 || numbers.some((n) => !Number.isFinite(n))) {
+      throw new UsageError("--region takes x,y,width,height");
+    }
+
+    const [x, y, width, height] = numbers;
+    rest.region = { x, y, width, height };
+  }
+
+  // `out` names a local file; the plugin has no use for it.
+  delete rest.out;
 
   if (spec.variadic) {
     return { ...coerceAll(rest), [spec.variadic]: positionals.length ? positionals : undefined };
@@ -167,9 +221,19 @@ async function main(argv) {
   // Latency is a property of the round trip, which only this end can see —
   // the plugin has no idea when the request left.
   const startedAt = Date.now();
-  const result = await daemon(port, "/op", { op: spec.op, args: opArguments(command, spec, positionals, flags) });
+  const result = await daemon(port, "/op", {
+    op: spec.op,
+    args: opArguments(command, spec, positionals, flags),
+    // A capture ships megabytes of RGBA through base64 chunks; the default is
+    // sized for reads that answer instantly.
+    timeoutMs: spec.timeoutMs,
+  });
 
   if (command === "ping") result.latencyMs = Date.now() - startedAt;
+
+  // The plugin hands back raw RGBA in an artifact; turning it into a file is
+  // this side's job, because that is where zlib lives.
+  if (command === "photo") result.file = await writePhoto(port, result, flags);
 
   process.stdout.write(`${flags.raw ? JSON.stringify(result, null, 2) : render(command, result)}\n`);
   return EXIT.ok;

@@ -16,9 +16,10 @@ local MuslimSync = script:FindFirstAncestor("MuslimSync")
 
 local Http = require(MuslimSync.Client.Http)
 
--- Comfortably under the daemon's 1 MiB chunk ceiling once base64 inflates it
--- by a third, with room for the surrounding frame.
-local CHUNK_BYTES = 512 * 1024
+-- Fallback only. The real size comes from the lease, so the two sides cannot
+-- drift apart: hardcoding 512 KB here while the daemon capped bodies at 256 KB
+-- is exactly how every capture larger than a thumbnail came to hang.
+local FALLBACK_CHUNK_BYTES = 128 * 1024
 
 local Artifacts = {}
 
@@ -49,10 +50,15 @@ function Artifacts.upload(port: number, data: buffer, mime: string): { [string]:
 		:expect()
 		:decode()
 
+	-- The daemon states its own limit; base64 inflates by 4/3, so the raw slice
+	-- has to be three quarters of it to fit the body.
+	local ceiling = tonumber(lease.chunkBytes) or FALLBACK_CHUNK_BYTES
+	local chunkBytes = math.max(math.floor(ceiling * 0.7), 4096)
+
 	local offset = 0
 
 	while offset < total do
-		local length = math.min(CHUNK_BYTES, total - offset)
+		local length = math.min(chunkBytes, total - offset)
 
 		Http.post(url(port, "chunk"), {
 			id = lease.id,

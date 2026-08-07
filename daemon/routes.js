@@ -14,7 +14,10 @@ import { spawnSync } from "node:child_process";
 import * as projects from "./projects.js";
 import { vendoredArgon } from "./argon.js";
 
-const MAX_BODY_BYTES = 256 * 1024;
+// Must exceed a base64-encoded artifact chunk, which inflates by 4/3, plus the
+// surrounding MsgPack map. At 256 KB this was smaller than one chunk, so every
+// capture past a tiny region died on a 413 that surfaced as a hang.
+const MAX_BODY_BYTES = 2 * 1024 * 1024;
 
 /** Reads and decodes a MsgPack body, bounded so a bad caller cannot exhaust us. */
 async function readBody(request) {

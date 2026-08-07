@@ -48,6 +48,7 @@ local MODULES = {
 	require(script.Clipboard),
 	require(script.Mutate),
 	require(script.Runtime),
+	require(script.Capture),
 }
 
 for _, factory in MODULES do
