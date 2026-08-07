@@ -75,6 +75,23 @@ return function(_context)
 				fail("TIMEOUT", `eval exceeded {EVAL_TIMEOUT}s`)
 			end
 
+			-- LogService.MessageOut is deferred, and by more than one frame: a
+			-- single task.wait() still read the ring before anything landed, so
+			-- every print came back lost while `logs` showed them a second
+			-- later. Poll briefly for the ring to grow instead of guessing a
+			-- fixed delay — it settles immediately when there was no output.
+			local settleUntil = os.clock() + 0.25
+
+			while #ring == before and os.clock() < settleUntil do
+				task.wait()
+			end
+
+			-- Output arrives in bursts; give the rest of the burst a moment to
+			-- land once the first line shows up.
+			if #ring > before then
+				task.wait(0.05)
+			end
+
 			local output = {}
 			for index = before + 1, math.min(#ring, before + MAX_OUTPUT_LINES) do
 				table.insert(output, ring[index].message)
