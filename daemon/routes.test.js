@@ -13,6 +13,7 @@ let root;
 let daemon;
 let started;
 let logged;
+let changes;
 const temporary = [];
 
 /** Stands in for ArgonProcesses: records starts, never spawns anything. */
@@ -43,6 +44,7 @@ beforeEach(async () => {
   temporary.push(root);
   started = [];
   logged = [];
+  changes = 0;
 
   daemon = new Daemon({
     port: 0,
@@ -50,6 +52,7 @@ beforeEach(async () => {
       projectsRoot: () => root,
       argon: fakeArgon(),
       log: (entry) => logged.push(entry),
+      changed: () => (changes += 1),
     }),
   });
 
@@ -327,4 +330,26 @@ test("unknown routes still fall through to /health", async () => {
   const health = await fetch(`http://127.0.0.1:${daemon.port}/health`);
   assert.equal(health.status, 200);
   assert.equal((await health.json()).listening, true);
+});
+
+// ------------------------------------------------- announcing to the app
+
+test("creating a project announces the change", async () => {
+  // Without this the app's list only refreshed when a plugin connected, so a
+  // project created from the plugin stayed invisible until something unrelated
+  // happened.
+  await call("POST", "/createProject", { name: "Announced", gameId: 5, placeId: 6 });
+
+  assert.ok(changes > 0, "expected at least one change notification");
+});
+
+test("serving an existing project announces it too", async () => {
+  // Whether a project is serving is part of what the list shows.
+  const created = await call("POST", "/createProject", { name: "ServeMe", gameId: 7, placeId: 8 });
+  const before = changes;
+
+  const { status } = await call("POST", "/startProject", { path: created.value.path });
+
+  assert.equal(status, 200);
+  assert.ok(changes > before, "serving must refresh the list");
 });

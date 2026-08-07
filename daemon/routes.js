@@ -12,6 +12,7 @@ import { encode, decode } from "@msgpack/msgpack";
 import { spawnSync } from "node:child_process";
 
 import * as projects from "./projects.js";
+import { universeName, suggestName, suggestFolder } from "./universe.js";
 import { vendoredArgon } from "./argon.js";
 
 // Must exceed a base64-encoded artifact chunk, which inflates by 4/3, plus the
@@ -75,7 +76,7 @@ function send(response, status, value) {
  * `context` supplies the projects root and the argon process manager, so the
  * routes hold no state of their own and are straightforward to test.
  */
-export function createRoutes({ projectsRoot, argon, artifacts, log = () => {} }) {
+export function createRoutes({ projectsRoot, argon, artifacts, log = () => {}, changed = () => {} }) {
   // Artifact routes exist only when a store is supplied; the headless daemon
   // has no need for binary transport.
   const artifactRoutes = artifacts
@@ -98,6 +99,13 @@ export function createRoutes({ projectsRoot, argon, artifacts, log = () => {} })
   /** Starts a project and returns the session the plugin should connect to. */
   async function serveProject(projectPath) {
     const session = await argon.start(projectPath);
+
+    // Whether a project is serving is part of what the list shows, so the app
+    // has to hear about it. Without this the only thing that ever refreshed the
+    // list was a plugin connecting, and a project created from the plugin sat
+    // invisible until something unrelated happened.
+    changed();
+
     return { host: session.host, port: session.port };
   }
 
@@ -105,6 +113,16 @@ export function createRoutes({ projectsRoot, argon, artifacts, log = () => {} })
     ...artifactRoutes,
 
     "GET /projects": async () => projects.list(projectsRoot(), { running: argon.running }),
+
+    // What to put in the create dialog's fields. The plugin supplies what only
+    // Studio knows (the place's own title); the universe name is looked up
+    // here, where there is network access.
+    "POST /suggestName": async (body) => {
+      const gameName = await universeName(body.gameId);
+      const name = suggestName({ gameName, placeName: body.placeName });
+
+      return { name, folder: suggestFolder(name), gameName, placeName: body.placeName ?? null };
+    },
 
     "POST /browse": async (body) => projects.browse(projectsRoot(), body.path),
 
@@ -158,6 +176,10 @@ export function createRoutes({ projectsRoot, argon, artifacts, log = () => {} })
       }
 
       projects.claim(planned.path, identity);
+
+      // Announced before serving as well: the project exists on disk from here
+      // on, and a serve that fails should not make it invisible.
+      changed();
 
       return { ...(await serveProject(planned.path)), path: planned.path };
     },

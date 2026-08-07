@@ -1,5 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain, Notification, powerMonitor, shell, clipboard } from "electron";
 import path from "node:path";
+import { watch } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import { verseOfTheDay, poolRefs, resolve, dayNumber } from "../quran/daily.js";
@@ -111,6 +112,42 @@ function armReminder() {
 
 // ------------------------------------------------------------- the daemon
 
+// ------------------------------------------------------- watching the root
+
+let rootWatcher = null;
+let watchedRoot = null;
+let watchTimer = null;
+
+/**
+ * Refreshes the project list when the projects folder changes on disk.
+ *
+ * The daemon announces the projects it creates itself, but a project can also
+ * appear from `argon init`, from a git clone, or from someone making the folder
+ * by hand — and an app that only notices its own work looks broken in exactly
+ * those cases.
+ */
+function watchProjectsRoot() {
+  const root = settings.read().projectsRoot;
+
+  if (root === watchedRoot && rootWatcher) return;
+
+  rootWatcher?.close();
+  watchedRoot = root;
+
+  try {
+    rootWatcher = watch(root, { persistent: false }, () => {
+      // Creating a project writes several files; one notification per change
+      // would re-scan the disk a dozen times for a single create.
+      clearTimeout(watchTimer);
+      watchTimer = setTimeout(() => window?.webContents.send("projects:changed"), 150);
+    });
+  } catch {
+    // A root that does not exist yet is not an error — the user has simply not
+    // chosen one, and choosing one re-arms this.
+    rootWatcher = null;
+  }
+}
+
 function daemonStatus() {
   return { ...(daemon?.status() ?? { listening: false, port: null, plugins: [] }), error: daemonError };
 }
@@ -144,6 +181,7 @@ async function startDaemon() {
           console.log(`[plugin ${entry.level}] ${entry.source}: ${entry.message}`);
           record(entry.level, `${entry.source}: ${entry.message}`);
         },
+        changed: () => window?.webContents.send("projects:changed"),
       }),
     });
     daemon.on("change", publishStatus);
@@ -209,6 +247,7 @@ ipcMain.handle("projects:chooseRoot", async () => {
   if (!directory) return { ok: false, cancelled: true };
 
   settings.update({ projectsRoot: directory });
+  watchProjectsRoot();
   publishStatus();
 
   return { ok: true, root: directory };
@@ -224,6 +263,7 @@ ipcMain.handle("projects:addExisting", async () => {
 
   const root = projects.rootFor(directory);
   settings.update({ projectsRoot: root });
+  watchProjectsRoot();
   publishStatus();
 
   return { ok: true, root };
@@ -281,6 +321,7 @@ ipcMain.handle("settings:set", (_event, patch) => {
 app.whenReady().then(async () => {
   createWindow();
   armReminder();
+  watchProjectsRoot();
   await startDaemon();
 
   // The renderer may have finished loading before the daemon did.

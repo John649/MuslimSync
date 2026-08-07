@@ -218,6 +218,46 @@ function Discovery.claim(session: Session): Promise.Promise
 	return Http.post(`http://{session.host}:{session.port}/claimPlace`, body)
 end
 
+-- The place's own title.
+--
+-- `game.Name` is the DataModel's name, which is "Place1" even for a published
+-- place — checked against a live one rather than assumed. Product info carries
+-- the title people actually see, so it wins when the place is published.
+function Discovery.placeName(): string
+	local fallback = game.Name
+
+	if game.PlaceId == 0 then
+		return fallback
+	end
+
+	local ok, info = pcall(function()
+		return game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId, Enum.InfoType.Asset)
+	end)
+
+	if ok and type(info) == "table" and type(info.Name) == "string" and info.Name ~= "" then
+		return info.Name
+	end
+
+	return fallback
+end
+
+-- Asks the master what to put in the create dialog's fields.
+--
+-- The universe name is not reachable from Studio at all — not on the DataModel,
+-- not on StudioService, not in the product info table — so the master looks it
+-- up where there is network access. A place with no readable game name just
+-- gets its own title back.
+function Discovery.suggestName(): Promise.TypedPromise<{ name: string, folder: string }>
+	local placeName = Discovery.placeName()
+
+	return Http.post(`{MASTER_URL}/suggestName`, {
+		gameId = tostring(game.GameId),
+		placeName = placeName,
+	}):andThen(function(response)
+		return response:decode()
+	end)
+end
+
 -- Asks the master to scaffold a new project for this place,
 -- serve it, and hand back the session to connect to
 function Discovery.create(
@@ -226,7 +266,7 @@ function Discovery.create(
 	folder: string?
 ): Promise.TypedPromise<Session & { path: string }>
 	local body: { [string]: any } = {
-		name = if name and name ~= "" then name else game.Name,
+		name = if name and name ~= "" then name else Discovery.placeName(),
 	}
 
 	if dir and dir ~= "" then

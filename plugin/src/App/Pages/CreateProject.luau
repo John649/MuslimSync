@@ -38,7 +38,8 @@ local DEFAULT_DIR = "~/projects/Scratch"
 local function Field(
 	label: string,
 	binding: Fusion.Value<string>,
-	onSubmit: ((text: string, enterPressed: boolean?) -> ())?
+	onSubmit: ((text: string, enterPressed: boolean?) -> ())?,
+	onEdit: (() -> ())?
 ): Frame
 	local focused = Value(false)
 
@@ -74,6 +75,13 @@ local function Field(
 						Text = binding,
 						Started = function()
 							focused:set(true)
+
+							-- Touching the field claims it. A suggestion that
+							-- lands a moment later must not overwrite what the
+							-- user is in the middle of typing.
+							if onEdit then
+								onEdit()
+							end
 						end,
 						Changed = function(text)
 							binding:set(text)
@@ -105,11 +113,35 @@ local function shorten(path: string): string
 end
 
 return function(props: Props): { Instance }
-	-- Bound to a local first: selene's Roblox standard library types `game.Name`
-	-- as a plain property and rejects calling a string method directly on it.
-	local placeName: string = game.Name
+	-- Seeded with the place's real title, then upgraded to "Game - Place" once
+	-- the master has looked the universe name up. The dialog is usable
+	-- immediately either way: the lookup is a network round trip, and a form
+	-- that will not let you type until Roblox answers is worse than one that
+	-- fills in a moment later.
+	local placeName: string = Discovery.placeName()
 	local nameInput = Value(placeName)
-	local folderInput = Value((placeName:gsub("[^%w _-]", "")) .. "MuslimSync")
+	local folderInput = Value(placeName)
+	-- Typing must win over a suggestion that lands afterwards.
+	local edited = Value(false)
+
+	Discovery.suggestName()
+		:andThen(function(suggestion)
+			if peek(edited) or type(suggestion) ~= "table" then
+				return
+			end
+
+			if type(suggestion.name) == "string" and suggestion.name ~= "" then
+				nameInput:set(suggestion.name)
+			end
+
+			if type(suggestion.folder) == "string" and suggestion.folder ~= "" then
+				folderInput:set(suggestion.folder)
+			end
+		end)
+		:catch(function()
+			-- No master, no network, or a private universe. The place name is
+			-- already in the field and is a perfectly good answer.
+		end)
 	local dirInput = Value(DEFAULT_DIR)
 	local newFolderName = Value("")
 
@@ -183,8 +215,12 @@ return function(props: Props): { Instance }
 			Font = Theme.Fonts.Mono,
 			TextSize = Theme.TextSize.Medium,
 		},
-		Field("Project name", nameInput),
-		Field("Folder name", folderInput),
+		Field("Project name", nameInput, nil, function()
+			edited:set(true)
+		end),
+		Field("Folder name", folderInput, nil, function()
+			edited:set(true)
+		end),
 		Field("Directory", dirInput, function(text, enterPressed)
 			-- Enter-only: clicking away (e.g. onto a folder row) must not navigate
 			if enterPressed and text:gsub("%s", "") ~= "" then
