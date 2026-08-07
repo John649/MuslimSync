@@ -115,21 +115,30 @@ return function(_context)
 			return { lines = matched, total = #ring }
 		end,
 
+		-- Attempted rather than pre-checked. CanUndo/CanRedo do not exist, and
+		-- GetCanUndo is deprecated — trying the operation and reporting what
+		-- Studio says is both simpler and immune to the next rename.
 		undo = function()
-			if not ChangeHistoryService:CanUndo() then
-				fail("CONFLICT", "there is nothing to undo")
+			local ok, err = pcall(function()
+				ChangeHistoryService:Undo()
+			end)
+
+			if not ok then
+				fail("CONFLICT", `nothing to undo ({tostring(err)})`)
 			end
 
-			ChangeHistoryService:Undo()
 			return { undone = true }
 		end,
 
 		redo = function()
-			if not ChangeHistoryService:CanRedo() then
-				fail("CONFLICT", "there is nothing to redo")
+			local ok, err = pcall(function()
+				ChangeHistoryService:Redo()
+			end)
+
+			if not ok then
+				fail("CONFLICT", `nothing to redo ({tostring(err)})`)
 			end
 
-			ChangeHistoryService:Redo()
 			return { redone = true }
 		end,
 

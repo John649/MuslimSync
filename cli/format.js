@@ -137,6 +137,15 @@ export function render(command, result) {
     case "ping":
       return `${green("pong")} ${dim(`${result.latencyMs}ms`)}`;
 
+    case "undo":
+      return green("undone");
+
+    case "redo":
+      return green("redone");
+
+    case "save":
+      return `${green("saving")} ${dim("(Studio saves asynchronously)")}`;
+
     case "copy":
       return [
         `${green("copied")} ${result.roots.length} root(s), ${bytes(result.size)}`,
