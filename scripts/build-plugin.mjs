@@ -31,9 +31,13 @@ if (!existsSync(binary)) {
 }
 
 // --install writes straight into Studio's plugins folder instead of dist/, and
-// --watch rebuilds on every save. Together they are the iteration loop: Studio
-// reloads a local plugin when its file changes, so a save is visible in a
-// couple of seconds without touching the Studio UI.
+// --watch rebuilds on every save.
+//
+// Measured, not assumed: Studio does NOT hot-reload a local plugin when its
+// .rbxm changes. A rebuild at 19:53 left a plugin that had connected at 19:52
+// still running a minute later, with no reconnect. Studio must be restarted to
+// pick up a new build, so this is a fast *build* loop, not a fast *feedback*
+// loop — budget a Studio restart per visual change.
 const install = process.argv.includes("--install");
 const watch = process.argv.includes("--watch");
 

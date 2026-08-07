@@ -108,6 +108,13 @@ export class Daemon extends EventEmitter {
   async #handleHttp(request, response) {
     if (await handleRoute(this.routes, request, response)) return;
 
+    // The CLI's transport: one op in, one result out. JSON rather than MsgPack
+    // because this side is ours, not Argon's.
+    if (request.method === "POST" && request.url === "/op") {
+      await this.#handleOp(request, response);
+      return;
+    }
+
     if (request.method === "GET" && request.url === "/health") {
       response.writeHead(200, { "content-type": "application/json" });
       response.end(JSON.stringify(this.status()));
@@ -116,6 +123,51 @@ export class Daemon extends EventEmitter {
 
     response.writeHead(404, { "content-type": "application/json" });
     response.end(JSON.stringify({ ok: false, error: { code: ERROR.NOT_FOUND, message: "no such route" } }));
+  }
+
+  async #handleOp(request, response) {
+    const chunks = [];
+    let total = 0;
+
+    for await (const chunk of request) {
+      total += chunk.length;
+      if (total > MAX_FRAME_BYTES) {
+        response.writeHead(413).end();
+        return;
+      }
+      chunks.push(chunk);
+    }
+
+    const reply = (status, body) => {
+      response.writeHead(status, { "content-type": "application/json" });
+      response.end(JSON.stringify(body));
+    };
+
+    let call;
+    try {
+      call = JSON.parse(Buffer.concat(chunks).toString() || "{}");
+    } catch {
+      reply(400, { ok: false, error: { code: ERROR.INVALID_ARGUMENT, message: "body is not valid JSON" } });
+      return;
+    }
+
+    if (typeof call.op !== "string" || !call.op) {
+      reply(400, { ok: false, error: { code: ERROR.INVALID_ARGUMENT, message: "op is required" } });
+      return;
+    }
+
+    try {
+      reply(200, { ok: true, value: await this.request(call.op, call.args ?? {}, { placeId: call.placeId }) });
+    } catch (cause) {
+      // The plugin's own error codes reach the caller intact — the CLI branches
+      // on them, so translating here would lose the distinction between
+      // "not connected" and "the plugin said no".
+      const status = cause.code === ERROR.NOT_CONNECTED ? 503 : 200;
+      reply(status, {
+        ok: false,
+        error: { code: cause.code ?? ERROR.PLUGIN_ERROR, message: cause.message, retryable: cause.retryable === true },
+      });
+    }
   }
 
   #handleSocket(socket) {

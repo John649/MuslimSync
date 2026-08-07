@@ -47,6 +47,13 @@ return function(): Frame
 						Text = "\u{0645}",
 						TextSize = Theme.TextSize.Medium,
 						Color = Theme.Colors.TextBranded,
+						-- The Text component defaults to left alignment and
+						-- AutomaticSize.XY, which shrink-wraps the label and
+						-- parks the glyph in the corner. Both have to be undone
+						-- for it to sit in the middle of the mark.
+						AutomaticSize = Enum.AutomaticSize.None,
+						TextXAlignment = Enum.TextXAlignment.Center,
+						TextYAlignment = Enum.TextYAlignment.Center,
 					},
 				},
 			},

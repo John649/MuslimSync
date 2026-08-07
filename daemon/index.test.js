@@ -297,3 +297,73 @@ test("plugin events are re-emitted with their place", async () => {
   await plugin.close();
   await daemon.stop();
 });
+
+// ---------------------------------------------------------------- POST /op
+
+test("POST /op forwards an op to the plugin and returns its value", async () => {
+  const daemon = new Daemon({ port: 0 });
+  await daemon.start();
+
+  const plugin = await fakePlugin(daemon.port, { handlers: { ping: (args) => ({ pong: true, nonce: args.nonce }) } }).connect();
+  await settled();
+
+  const response = await fetch(`http://127.0.0.1:${daemon.port}/op`, {
+    method: "POST",
+    body: JSON.stringify({ op: "ping", args: { nonce: 7 } }),
+  });
+
+  assert.deepEqual(await response.json(), { ok: true, value: { pong: true, nonce: 7 } });
+
+  await plugin.close();
+  await daemon.stop();
+});
+
+test("POST /op passes the plugin's error code through untranslated", async () => {
+  // The CLI branches on codes. Collapsing them here would lose the difference
+  // between "the plugin said no" and "nothing is connected".
+  const daemon = new Daemon({ port: 0 });
+  await daemon.start();
+
+  const plugin = await fakePlugin(daemon.port, { handlers: {} }).connect();
+  await settled();
+
+  const response = await fetch(`http://127.0.0.1:${daemon.port}/op`, {
+    method: "POST",
+    body: JSON.stringify({ op: "nope" }),
+  });
+
+  const body = await response.json();
+  assert.equal(response.status, 200, "a plugin-level refusal is not an HTTP failure");
+  assert.equal(body.ok, false);
+  assert.equal(body.error.code, ERROR.UNKNOWN_OP);
+
+  await plugin.close();
+  await daemon.stop();
+});
+
+test("POST /op reports 503 when no plugin is connected", async () => {
+  const daemon = new Daemon({ port: 0 });
+  await daemon.start();
+
+  const response = await fetch(`http://127.0.0.1:${daemon.port}/op`, {
+    method: "POST",
+    body: JSON.stringify({ op: "ping" }),
+  });
+
+  assert.equal(response.status, 503, "no Studio is a transport failure, not a plugin refusal");
+  assert.equal((await response.json()).error.code, ERROR.NOT_CONNECTED);
+
+  await daemon.stop();
+});
+
+test("POST /op rejects a malformed call", async () => {
+  const daemon = new Daemon({ port: 0 });
+  await daemon.start();
+
+  for (const body of ["{ not json", JSON.stringify({}), JSON.stringify({ op: "" })]) {
+    const response = await fetch(`http://127.0.0.1:${daemon.port}/op`, { method: "POST", body });
+    assert.equal(response.status, 400, `expected ${body} to be refused`);
+  }
+
+  await daemon.stop();
+});
