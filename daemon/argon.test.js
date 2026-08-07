@@ -11,7 +11,7 @@ import { ArgonProcesses } from "./argon.js";
  * both to find a free port and to wait for one to open, so a fake that answers
  * true for every port makes allocation believe they are all taken.
  */
-function harness({ readyAfter = 1, neverReady = false, exitAfter = null, busy = [] } = {}) {
+function harness({ readyAfter = 1, neverReady = false, exitAfter = null, busy = [], says = null } = {}) {
   const spawned = [];
   // port -> probes remaining before it answers. Absent means nothing listening.
   const listeners = new Map(busy.map((port) => [port, 0]));
@@ -20,6 +20,8 @@ function harness({ readyAfter = 1, neverReady = false, exitAfter = null, busy = 
     const port = Number(args[args.indexOf("--port") + 1]);
 
     const child = new EventEmitter();
+    child.stdout = new EventEmitter();
+    child.stderr = new EventEmitter();
     child.killed = false;
     child.kill = () => {
       child.killed = true;
@@ -30,6 +32,10 @@ function harness({ readyAfter = 1, neverReady = false, exitAfter = null, busy = 
     spawned.push({ binary, args, options, child, port });
 
     if (!neverReady) listeners.set(port, readyAfter);
+
+    // What argon prints on the way out is the whole diagnosis, so the fake has
+    // to be able to say something.
+    if (says !== null) setTimeout(() => child.stdout.emit("data", says), 5);
     if (exitAfter !== null) setTimeout(() => child.emit("exit", exitAfter, null), 10);
 
     return child;
@@ -189,4 +195,79 @@ test("a missing binary names the exact path to put one at", async () => {
     assert.match(error.message, /vendor\/argon\//, "the message must include the path to drop a release at");
     return true;
   });
+});
+
+// ------------------------------------------------- adopting an orphaned serve
+
+test("a serve that is already running is adopted, not treated as a failure", async () => {
+  // The app being force-quit or crashing leaves its argon child alive. The
+  // restarted app has an empty session map, so it spawns a second serve, and
+  // argon refuses and names the port the first one is on.
+  const { processes } = harness({
+    neverReady: true,
+    exitAfter: 0,
+    busy: [8000],
+    says: "INFO: Already serving on: http://localhost:8000 - nothing to do. Run argon stop first\n",
+  });
+
+  const session = await processes.start("/tmp/project");
+
+  assert.equal(session.port, 8000);
+  assert.equal(session.host, "localhost");
+  assert.equal(session.adopted, true);
+  assert.equal(session.child, null, "there is no child to kill; claiming one would make stopAll lie");
+});
+
+test("an adopted session is what the project list reports", async () => {
+  const { processes } = harness({
+    neverReady: true,
+    exitAfter: 0,
+    busy: [8000],
+    says: "Already serving on: http://localhost:8000\n",
+  });
+
+  await processes.start("/tmp/project");
+
+  assert.equal(processes.session("/tmp/project").port, 8000);
+  assert.equal(processes.running.size, 1);
+});
+
+test("a session file that outlived its process is not adopted", async () => {
+  // Argon can claim a port nothing is listening on. Adopting that would just
+  // move the failure to the first request.
+  const { processes } = harness({
+    neverReady: true,
+    exitAfter: 0,
+    says: "Already serving on: http://localhost:8000\n",
+  });
+
+  await assert.rejects(processes.start("/tmp/project"), /exited before it was ready/);
+});
+
+test("stopping an adopted session asks argon, since there is no child", async () => {
+  const { processes, spawned } = harness({
+    neverReady: true,
+    exitAfter: 0,
+    busy: [8000],
+    says: "Already serving on: http://localhost:8000\n",
+  });
+
+  await processes.start("/tmp/project");
+  processes.stop("/tmp/project");
+
+  const stop = spawned.find((s) => s.args[0] === "stop");
+  assert.ok(stop, "expected an argon stop");
+  assert.deepEqual(stop.args, ["stop", "--host", "localhost", "--port", "8000", "--yes"]);
+});
+
+test("argon's own words survive into the error", async () => {
+  // A bare exit code sent this exact bug on a twenty minute detour; the last
+  // line argon printed said precisely what was wrong.
+  const { processes } = harness({
+    neverReady: true,
+    exitAfter: 1,
+    says: "ERROR: failed to read default.project.json: expected value at line 3\n",
+  });
+
+  await assert.rejects(processes.start("/tmp/project"), /expected value at line 3/);
 });

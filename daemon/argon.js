@@ -109,6 +109,36 @@ export class ArgonProcesses {
     return attempt;
   }
 
+  /**
+   * Takes over a serve that is already running for this project.
+   *
+   * Returns null when argon said something else, or when the port it named is
+   * not actually answering — a session file can outlive the process that wrote
+   * it, and adopting a dead one would just move the failure later.
+   */
+  async #adopt(projectPath, output) {
+    const match = /already serving on:?\s*https?:\/\/([\w.-]+):(\d+)/i.exec(output);
+    if (!match) return null;
+
+    const [, host, port] = match;
+    if (!(await this.probe(Number(port), host))) return null;
+
+    const session = {
+      host,
+      port: Number(port),
+      startedAt: this.now(),
+      // Null because we did not spawn it: there is no child to kill, and
+      // pretending otherwise would make stopAll look like it worked.
+      child: null,
+      path: projectPath,
+      adopted: true,
+    };
+
+    this.#sessions.set(projectPath, session);
+
+    return session;
+  }
+
   async #launch(projectPath) {
     if (!this.binary) {
       // Actionable, because the fix is a file the user has to put somewhere —
@@ -127,6 +157,17 @@ export class ArgonProcesses {
       stdio: ["ignore", "pipe", "pipe"],
     });
 
+    // Argon explains itself on the way out, and throwing that away turned
+    // "already serving on 8000" — which says exactly what to do — into a bare
+    // exit code that says nothing.
+    let output = "";
+    const collect = (chunk) => {
+      output += String(chunk);
+    };
+
+    child.stdout?.on("data", collect);
+    child.stderr?.on("data", collect);
+
     let exited = null;
     child.once("exit", (code, signal) => {
       exited = { code, signal };
@@ -142,7 +183,17 @@ export class ArgonProcesses {
       // file, or a port that was taken between the check and the spawn. Report
       // it instead of waiting out the full timeout.
       if (exited) {
-        throw new Error(`argon serve exited before it was ready (code ${exited.code ?? exited.signal})`);
+        // A serve we did not spawn is still a serve. Argon refuses to start a
+        // second one for the same project and names the port the first is on,
+        // which happens whenever the app was force-quit or crashed: the child
+        // outlives it, and the restarted app has an empty session map.
+        const adopted = await this.#adopt(projectPath, output);
+        if (adopted) return adopted;
+
+        throw new Error(
+          `argon serve exited before it was ready (code ${exited.code ?? exited.signal})` +
+            (output.trim() ? `: ${output.trim().split("\n").at(-1)}` : ""),
+        );
       }
 
       if (await this.probe(port)) {
@@ -158,12 +209,34 @@ export class ArgonProcesses {
     throw new Error(`argon serve did not open port ${port} within ${READY_TIMEOUT_MS}ms`);
   }
 
+  /**
+   * Stops a serve we adopted rather than spawned.
+   *
+   * There is no child to kill, so argon is asked to stop it by address. Without
+   * this an adopted session outlives the app exactly like the orphan it was,
+   * and the next launch adopts it again forever.
+   */
+  #stopAdopted(session) {
+    try {
+      this.spawn(this.binary, ["stop", "--host", session.host, "--port", String(session.port), "--yes"], {
+        stdio: "ignore",
+      });
+    } catch {
+      // Best effort on the way out. A serve we could not stop is a stray
+      // process, not a reason to block the app from quitting.
+    }
+  }
+
   stop(projectPath) {
     const session = this.#sessions.get(projectPath);
     if (!session) return false;
 
     this.#sessions.delete(projectPath);
-    session.child?.kill();
+    if (session.adopted) {
+      this.#stopAdopted(session);
+    } else {
+      session.child?.kill();
+    }
     return true;
   }
 
