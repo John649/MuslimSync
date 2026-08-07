@@ -142,6 +142,8 @@ export const COMMANDS = {
     flags: {
       out: "output file (default ./capture.png)",
       subject: "path to frame the camera on, e.g. Workspace/Boss",
+      isolate: "render the subject alone on a transparent background",
+      tight: "crop an isolated render to the pixels that were drawn (default true)",
       margin: "how much air to leave around the subject (default 1.25)",
       region: "x,y,width,height to crop in the viewport",
       delay: "seconds to wait before the frame is taken",
@@ -149,6 +151,7 @@ export const COMMANDS = {
     examples: [
       "msync photo --out shot.png",
       "msync photo --subject Workspace/Boss --out boss.png",
+      "msync photo --subject Workspace/Boss --isolate --out boss.png",
       "msync photo --region 0,0,512,512 --out crop.png",
     ],
   },

@@ -36,6 +36,19 @@ contextBridge.exposeInMainWorld("muslimsync", {
       ipcRenderer.on("activity:changed", () => handler());
     },
   },
+  commands: {
+    list: () => ipcRenderer.invoke("commands:list"),
+    run: (name, args) => ipcRenderer.invoke("commands:run", name, args),
+  },
+  capture: {
+    take: (options) => ipcRenderer.invoke("capture:take", options),
+  },
+  playtest: {
+    status: () => ipcRenderer.invoke("playtest:status"),
+    start: (options) => ipcRenderer.invoke("playtest:start", options),
+    stop: () => ipcRenderer.invoke("playtest:stop"),
+    run: (source, context) => ipcRenderer.invoke("playtest:run", source, context),
+  },
   conflicts: {
     list: () => ipcRenderer.invoke("conflicts:list"),
   },

@@ -17,6 +17,7 @@ local MuslimSync = script:FindFirstAncestor("MuslimSync")
 
 local Artifacts = require(MuslimSync.Control.Artifacts)
 local Path = require(MuslimSync.Control.Path)
+local Photo = require(MuslimSync.Control.Photo)
 
 local CAPTURE_TIMEOUT = 20
 -- A 3/4 view reads as depth rather than as an elevation drawing, and leaving
@@ -160,6 +161,42 @@ end
 ---
 --- Split out from the `photo` op so the camera can be restored around it: a
 --- failure in here must not leave the user's camera pointing at the subject.
+--- One screenshot, decoded, as RGBA8 for the whole viewport.
+---
+--- Split out because the isolated path needs two of them and must not care how
+--- a frame is obtained.
+local function readViewport(): (buffer, Vector2)
+	local content = screenshot()
+
+	local decoded, image = pcall(function()
+		return AssetService:CreateEditableImageAsync(content :: any)
+	end)
+
+	if not decoded or not image then
+		fail("PLUGIN_ERROR", `could not decode the screenshot: {tostring(image)}`)
+	end
+
+	local editable = image :: EditableImage
+	local size = editable.Size
+
+	if size.X < 1 or size.Y < 1 then
+		editable:Destroy()
+		fail("PLUGIN_ERROR", `the screenshot decoded to {size.X}x{size.Y}`)
+	end
+
+	local read, pixels = pcall(function()
+		return editable:ReadPixelsBuffer(Vector2.zero, size)
+	end)
+
+	editable:Destroy()
+
+	if not read then
+		fail("PLUGIN_ERROR", `could not read pixels: {tostring(pixels)}`)
+	end
+
+	return pixels :: buffer, size
+end
+
 local function capture(args, context)
 	local content = screenshot()
 
@@ -248,6 +285,35 @@ return function(context)
 		photo = function(args)
 			if not available() then
 				fail("PERMISSION_REQUIRED", "CaptureService:CaptureScreenshot is not available in this Studio build")
+			end
+
+			-- An isolated render is a different pipeline, not a flag on this
+			-- one: it photographs a parked clone twice and solves for alpha,
+			-- so it never takes the ordinary single frame at all.
+			if args.isolate == true then
+				if args.subject == nil then
+					fail("INVALID_ARGUMENT", "isolate needs a subject to render")
+				end
+
+				local subject = Path.resolveChild(args.subject, "rendered")
+				local rendered = Photo.isolate(subject, {
+					margin = tonumber(args.margin),
+					capture = readViewport,
+				})
+
+				local metadata = Artifacts.upload(context.port(), rendered.pixels, "application/octet-stream")
+
+				return {
+					artifact = metadata.id,
+					width = rendered.size.X,
+					height = rendered.size.Y,
+					byteLength = buffer.len(rendered.pixels),
+					sha256 = metadata.sha256,
+					isolated = true,
+					subject = tostring(args.subject),
+					viewport = { width = rendered.size.X, height = rendered.size.Y },
+					region = { x = 0, y = 0, width = rendered.size.X, height = rendered.size.Y },
+				}
 			end
 
 			-- Framing happens before the delay so a caller can still stage the

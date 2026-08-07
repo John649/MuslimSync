@@ -187,7 +187,8 @@
           </section>
 
           <section class="page is-hidden" id="view-commands" data-note="Drop a folder in .muslimsync/commands and it appears here">
-            <div class="hero">
+            <ul class="cmd-list is-hidden" id="command-list"></ul>
+            <div class="hero" id="commands-empty">
               <span class="hero-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M5 7.5 8.5 11 5 14.5" />
@@ -216,6 +217,20 @@
                 for screen capture permission the first time.
               </p>
             </div>
+
+            <div class="tool">
+              <div class="tool-row">
+                <input class="field is-grow" type="text" id="capture-subject"
+                       placeholder="Workspace/Boss — leave empty for the whole viewport" />
+                <label class="check">
+                  <input type="checkbox" id="capture-isolate" />
+                  <span>Isolate</span>
+                </label>
+                <button class="button is-primary" type="button" id="capture-take">Capture</button>
+              </div>
+              <p class="tool-note" id="capture-note"></p>
+              <div class="shot is-hidden" id="capture-shot"><img alt="" id="capture-image" /></div>
+            </div>
           </section>
 
           <section class="page is-hidden" id="view-playtest" data-note="Scripted playtests with streamed events">
@@ -230,6 +245,36 @@
                 Run a Luau file inside a real playtest — server or client, single or
                 multiplayer — and get a pass or fail back.
               </p>
+            </div>
+
+            <div class="tool">
+              <div class="tool-row">
+                <select class="field" id="playtest-mode">
+                  <option value="play">Play</option>
+                  <option value="run">Run</option>
+                  <option value="multiplayer">Multiplayer</option>
+                </select>
+                <select class="field" id="playtest-players">
+                  <option value="1">1 player</option>
+                  <option value="2">2 players</option>
+                  <option value="3">3 players</option>
+                  <option value="4">4 players</option>
+                </select>
+                <button class="button is-primary" type="button" id="playtest-start">Start</button>
+                <button class="button" type="button" id="playtest-stop">Stop</button>
+              </div>
+              <p class="tool-note" id="playtest-note">Not running.</p>
+
+              <div class="tool-row">
+                <select class="field" id="playtest-context">
+                  <option value="server">server</option>
+                  <option value="client">client</option>
+                </select>
+                <input class="field is-grow" type="text" id="playtest-source"
+                       placeholder="return #game.Players:GetPlayers()" />
+                <button class="button" type="button" id="playtest-run">Run</button>
+              </div>
+              <pre class="output is-hidden" id="playtest-output"></pre>
             </div>
           </section>
 
@@ -292,5 +337,6 @@
     </div>
 
     <script type="module" src="app.js"></script>
+    <script type="module" src="tools.js"></script>
   </body>
 </html>

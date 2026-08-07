@@ -134,3 +134,36 @@ export function cropRgba(rgba, width, height, { x, y, width: w, height: h }) {
 
   return out;
 }
+
+/**
+ * The bounding box of everything with alpha above `threshold`.
+ *
+ * This is what makes an isolated render tight. The subject is photographed
+ * twice against known backdrops and the alpha solved from the difference, so
+ * the pixels that "got drawn" are exactly the ones with alpha — and the rest is
+ * empty frame nobody wants in the file.
+ *
+ * Returns null when the image is entirely transparent, which the caller must
+ * treat as "nothing rendered" rather than cropping to nothing.
+ */
+export function alphaBounds(rgba, width, height, threshold = 0) {
+  let minX = width;
+  let minY = height;
+  let maxX = -1;
+  let maxY = -1;
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      if (rgba[(y * width + x) * 4 + 3] > threshold) {
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+    }
+  }
+
+  if (maxX < 0) return null;
+
+  return { x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1 };
+}

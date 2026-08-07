@@ -9,6 +9,7 @@ import { ArgonProcesses } from "../daemon/argon.js";
 import { createRoutes } from "../daemon/routes.js";
 import * as projects from "../daemon/projects.js";
 import { Artifacts } from "../daemon/artifacts.js";
+import { registerTools } from "./tools.js";
 import { shouldFire, msUntilNextCheck } from "./reminder.js";
 import * as settings from "./settings.js";
 
@@ -317,6 +318,16 @@ ipcMain.handle("settings:set", (_event, patch) => {
 });
 
 // ------------------------------------------------------------------ startup
+
+registerTools({
+  // Read through getters: the daemon is replaced on restart, and a captured
+  // reference would keep answering from the dead one.
+  daemon: () => daemon,
+  artifacts: () => artifacts,
+  appRoot: path.join(HERE, ".."),
+  directory: () => settings.DIR,
+  record,
+});
 
 app.whenReady().then(async () => {
   createWindow();

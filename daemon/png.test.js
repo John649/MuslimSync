@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { inflateSync } from "node:zlib";
 
-import { encodePng, readPngHeader, cropRgba, PngError } from "./png.js";
+import { encodePng, readPngHeader, cropRgba, alphaBounds, PngError } from "./png.js";
 
 /** Builds RGBA where each pixel encodes its own coordinates, so crops are checkable. */
 function grid(width, height) {
@@ -120,4 +120,46 @@ test("crop then encode produces a valid PNG of the cropped size", () => {
   const png = encodePng(cropRgba(rgba, 16, 12, box), box.width, box.height);
 
   assert.deepEqual(readPngHeader(png), { width: 6, height: 5, bitDepth: 8, colourType: 6 });
+});
+
+// ------------------------------------------------------------ alphaBounds
+
+test("finds the box around everything that was drawn", () => {
+  const width = 10;
+  const height = 8;
+  const rgba = Buffer.alloc(width * height * 4);
+
+  // A 5x4 opaque block at (3,2), everything else transparent.
+  for (let y = 2; y < 6; y += 1) {
+    for (let x = 3; x < 8; x += 1) rgba[(y * width + x) * 4 + 3] = 255;
+  }
+
+  assert.deepEqual(alphaBounds(rgba, width, height), { x: 3, y: 2, width: 5, height: 4 });
+});
+
+test("a fully transparent image has no bounds", () => {
+  // The caller must treat this as "nothing rendered" rather than cropping to
+  // nothing, so it has to be distinguishable from a valid box.
+  assert.equal(alphaBounds(Buffer.alloc(4 * 4 * 4), 4, 4), null);
+});
+
+test("a fully opaque image is its own bounds", () => {
+  const rgba = Buffer.alloc(6 * 5 * 4);
+  for (let i = 3; i < rgba.length; i += 4) rgba[i] = 255;
+
+  assert.deepEqual(alphaBounds(rgba, 6, 5), { x: 0, y: 0, width: 6, height: 5 });
+});
+
+test("the threshold discards near-transparent edge pixels", () => {
+  // Matte extraction leaves a little noise where the backdrop showed through;
+  // a threshold is what stops that noise dictating the crop.
+  const width = 3;
+  const height = 3;
+  const rgba = Buffer.alloc(width * height * 4);
+
+  for (let i = 3; i < rgba.length; i += 4) rgba[i] = 5;
+  rgba[(1 * width + 1) * 4 + 3] = 255;
+
+  assert.deepEqual(alphaBounds(rgba, width, height, 0), { x: 0, y: 0, width: 3, height: 3 });
+  assert.deepEqual(alphaBounds(rgba, width, height, 8), { x: 1, y: 1, width: 1, height: 1 });
 });
