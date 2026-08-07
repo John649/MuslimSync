@@ -241,6 +241,9 @@ function module.start(host: string?, port: number?): Control?
 	end
 
 	local control = Control.new(host, port)
+	-- Handlers reach the daemon's HTTP routes directly for binary transport,
+	-- so they need the same port the socket uses.
+	Handlers.setPort(control.port)
 	control:start()
 
 	return control

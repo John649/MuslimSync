@@ -28,8 +28,15 @@ local function listOps(): { string }
 	return ops
 end
 
+-- The daemon port is not known when this module loads, so it is read through a
+-- function at call time rather than captured.
+local port = 7900
+
 local context = {
 	version = Version,
+	port = function()
+		return port
+	end,
 	-- Read at call time, so it reflects the fully built registry rather than
 	-- however much of it existed when this module was constructed.
 	listOps = listOps,
@@ -38,6 +45,8 @@ local context = {
 local MODULES = {
 	require(script.Core),
 	require(script.Tree),
+	require(script.Clipboard),
+	require(script.Mutate),
 }
 
 for _, factory in MODULES do
@@ -64,6 +73,10 @@ end
 
 function Handlers.version(): string
 	return Version.version
+end
+
+function Handlers.setPort(value: number)
+	port = value
 end
 
 return Handlers

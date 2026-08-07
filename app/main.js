@@ -7,6 +7,7 @@ import { Daemon } from "../daemon/index.js";
 import { ArgonProcesses } from "../daemon/argon.js";
 import { createRoutes } from "../daemon/routes.js";
 import * as projects from "../daemon/projects.js";
+import { Artifacts } from "../daemon/artifacts.js";
 import { shouldFire, msUntilNextCheck } from "./reminder.js";
 import * as settings from "./settings.js";
 
@@ -16,6 +17,7 @@ let window = null;
 let reminderTimer = null;
 let daemon = null;
 let argon = null;
+let artifacts = null;
 // Held separately from daemon.status() so a failed start still has something
 // to show: "port in use" is exactly what the user needs to see.
 let daemonError = null;
@@ -113,6 +115,10 @@ async function startDaemon() {
   const { controlPort } = settings.read();
 
   argon = new ArgonProcesses();
+  artifacts = new Artifacts({ directory: path.join(settings.DIR, "artifacts") });
+  // Anything left by a previous run is stale: leases do not survive a restart
+  // and finalized bytes nobody consumed are just disk.
+  artifacts.clear();
 
   try {
     daemon = new Daemon({
@@ -122,6 +128,7 @@ async function startDaemon() {
       routes: createRoutes({
         projectsRoot: () => settings.read().projectsRoot,
         argon,
+        artifacts,
         log: (entry) => console.log(`[plugin ${entry.level}] ${entry.source}: ${entry.message}`),
       }),
     });

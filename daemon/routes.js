@@ -72,7 +72,26 @@ function send(response, status, value) {
  * `context` supplies the projects root and the argon process manager, so the
  * routes hold no state of their own and are straightforward to test.
  */
-export function createRoutes({ projectsRoot, argon, log = () => {} }) {
+export function createRoutes({ projectsRoot, argon, artifacts, log = () => {} }) {
+  // Artifact routes exist only when a store is supplied; the headless daemon
+  // has no need for binary transport.
+  const artifactRoutes = artifacts
+    ? {
+        "POST /artifacts/lease": async (body) =>
+          artifacts.lease({ size: body.size, mime: body.mime, sha256: body.sha256 }),
+
+        "POST /artifacts/chunk": async (body) =>
+          artifacts.chunk(body.id, body.token, { offset: body.offset, dataBase64: body.data }),
+
+        "POST /artifacts/finalize": async (body) => artifacts.finalize(body.id, body.token),
+
+        "POST /artifacts/read": async (body) =>
+          artifacts.read(body.id, { offset: body.offset, limit: body.limit }),
+
+        "POST /artifacts/meta": async (body) => artifacts.metadata(body.id),
+      }
+    : {};
+
   /** Starts a project and returns the session the plugin should connect to. */
   async function serveProject(projectPath) {
     const session = await argon.start(projectPath);
@@ -80,6 +99,8 @@ export function createRoutes({ projectsRoot, argon, log = () => {} }) {
   }
 
   return {
+    ...artifactRoutes,
+
     "GET /projects": async () => projects.list(projectsRoot(), { running: argon.running }),
 
     "POST /browse": async (body) => projects.browse(projectsRoot(), body.path),
@@ -174,5 +195,9 @@ function statusFor(cause) {
   // A refused path is the caller's fault, not ours, and the plugin shows the
   // message — so it must not read as an internal error.
   if (cause.code === "PROJECT_PATH_ESCAPE" || cause.code === "INVALID_NAME") return 400;
+  // ArtifactError already knows its status (404 unknown, 409 out of order,
+  // 413 too large, 422 bad digest); reporting all of those as 500 would hide
+  // which one happened.
+  if (Number.isInteger(cause.status)) return cause.status;
   return 500;
 }
