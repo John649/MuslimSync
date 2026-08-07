@@ -23,6 +23,10 @@ export class Daemon extends EventEmitter {
   #server;
   #wss;
   #sessions = new Map();
+  // The cross-project clipboard. A copy in one place has to be pasteable in
+  // another without the caller carrying an artifact id around by hand — that
+  // is the entire point of calling it a clipboard.
+  #clipboard = null;
 
   constructor({ port = DEFAULT_PORT, host = HOST, routes = {} } = {}) {
     super();
@@ -156,8 +160,26 @@ export class Daemon extends EventEmitter {
       return;
     }
 
+    const args = { ...(call.args ?? {}) };
+
+    // Paste with no artifact means "the last thing copied".
+    if (call.op === "clipboard_paste" && !args.artifact) {
+      if (!this.#clipboard) {
+        reply(200, {
+          ok: false,
+          error: { code: ERROR.NOT_FOUND, message: "the clipboard is empty — copy something first", retryable: false },
+        });
+        return;
+      }
+      args.artifact = this.#clipboard;
+    }
+
     try {
-      reply(200, { ok: true, value: await this.request(call.op, call.args ?? {}, { placeId: call.placeId }) });
+      const value = await this.request(call.op, args, { placeId: call.placeId });
+
+      if (call.op === "clipboard_copy" && value?.artifact) this.#clipboard = value.artifact;
+
+      reply(200, { ok: true, value });
     } catch (cause) {
       // The plugin's own error codes reach the caller intact — the CLI branches
       // on them, so translating here would lose the distinction between

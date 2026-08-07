@@ -1,0 +1,223 @@
+// Human-readable rendering of op results.
+//
+// `--raw` prints the JSON verbatim; everything here is for the other case. The
+// aim is that a human reading a terminal sees the answer, not a data structure.
+
+import { COMMANDS, GROUPS } from "./commands.js";
+
+const isTTY = process.stdout.isTTY;
+const paint = (code, text) => (isTTY ? `[${code}m${text}[0m` : text);
+
+export const dim = (text) => paint(90, text);
+export const bold = (text) => paint(1, text);
+export const green = (text) => paint(32, text);
+export const red = (text) => paint(31, text);
+export const cyan = (text) => paint(36, text);
+
+/** Renders a tagged value back to something short and readable. */
+export function value(input) {
+  if (input === null || input === undefined) return dim("nil");
+  if (typeof input !== "object") return String(input);
+
+  switch (input.__type) {
+    case "Vector3":
+      return `${input.x}, ${input.y}, ${input.z}`;
+    case "Vector2":
+      return `${input.x}, ${input.y}`;
+    case "Color3":
+      return `rgb(${[input.r, input.g, input.b].map((c) => Math.round(c * 255)).join(", ")})`;
+    case "UDim2":
+      return `{${input.x.scale}, ${input.x.offset}}, {${input.y.scale}, ${input.y.offset}}`;
+    case "UDim":
+      return `${input.scale}, ${input.offset}`;
+    case "EnumItem":
+      return `Enum.${input.enum}.${input.name}`;
+    case "BrickColor":
+      return input.name;
+    case "NumberRange":
+      return `${input.min} .. ${input.max}`;
+    case "CFrame":
+      return input.components.slice(0, 3).map((n) => round(n)).join(", ") + dim(" (+rotation)");
+    case "Instance":
+      return `${input.path} ${dim(`(${input.class})`)}`;
+    case "Unsupported":
+      return dim(`<${input.of}>`);
+    default:
+      return JSON.stringify(input);
+  }
+}
+
+const round = (n) => (Number.isInteger(n) ? n : Number(n.toFixed(3)));
+
+function properties(map) {
+  const names = Object.keys(map).sort();
+  const width = Math.max(...names.map((n) => n.length), 0);
+  return names.map((name) => `  ${dim(name.padEnd(width))}  ${value(map[name])}`).join("\n");
+}
+
+function treeLines(node, prefix = "", isLast = true, depth = 0) {
+  const branch = depth === 0 ? "" : isLast ? "└─ " : "├─ ";
+  const label = `${prefix}${branch}${node.name} ${dim(node.class)}`;
+  const lines = [node.truncated ? `${label} ${dim(`(+${node.childCount} more)`)}` : label];
+
+  const children = node.children ?? [];
+  const nextPrefix = depth === 0 ? "" : prefix + (isLast ? "   " : "│  ");
+
+  children.forEach((child, index) => {
+    lines.push(...treeLines(child, nextPrefix, index === children.length - 1, depth + 1));
+  });
+
+  return lines;
+}
+
+/** Picks a renderer by command name, falling back to indented JSON. */
+export function render(command, result) {
+  if (result === null || result === undefined) return dim("(no output)");
+
+  switch (command) {
+    case "get":
+      if (result.prop) return `${dim(result.prop)}  ${value(result.value)}`;
+      return [`${bold(result.path || "game")} ${dim(result.class)}`, properties(result.properties ?? {})].join("\n");
+
+    case "props":
+      return [`${bold(result.path)} ${dim(result.class)}`, properties(result.properties ?? {})].join("\n");
+
+    case "ls": {
+      const rows = (result.children ?? []).map(
+        (child) => `  ${child.name.padEnd(28)} ${dim(child.class)}${child.childCount ? dim(` (${child.childCount})`) : ""}`,
+      );
+      const header = `${bold(result.path || "game")} ${dim(`— ${result.total} child(ren)`)}`;
+      return [header, ...rows, result.truncated ? dim("  … truncated") : null].filter(Boolean).join("\n");
+    }
+
+    case "tree":
+      return treeLines(result).join("\n");
+
+    case "find": {
+      const rows = (result.matches ?? []).map((m) => `  ${m.path} ${dim(m.class)}`);
+      const note = dim(`${result.matches.length} match(es), visited ${result.visited}${result.truncated ? ", truncated" : ""}`);
+      return [...rows, note].join("\n");
+    }
+
+    case "source":
+      return result.source ?? "";
+
+    case "set":
+      return `${bold(result.path)} ${dim(result.prop)}  ${value(result.before)} ${dim("→")} ${green(value(result.after))}`;
+
+    case "new":
+      return `${green("created")} ${result.path} ${dim(result.class)}`;
+
+    case "rm":
+      return `${red("destroyed")} ${result.path}`;
+
+    case "mv":
+      return `${result.from} ${dim("→")} ${green(result.to)}`;
+
+    case "attr":
+      if (result.attributes) return properties(result.attributes) || dim("(no attributes)");
+      if (result.removed) return `${red("removed")} ${result.name}`;
+      return `${dim(result.name)}  ${value(result.value)}`;
+
+    case "tag":
+      return result.tags?.length ? result.tags.map((t) => `  ${t}`).join("\n") : dim("(no tags)");
+
+    case "select":
+      if (result.paths) return result.paths.length ? result.paths.map((p) => `  ${p}`).join("\n") : dim("(nothing selected)");
+      return `${green("selected")} ${result.count}`;
+
+    case "eval":
+      return result.output?.length ? result.output.join("\n") : value(result.returned);
+
+    case "logs":
+      return (result.lines ?? [])
+        .map((line) => `${dim(line.at ?? "")} ${levelColour(line.level)(line.level.padEnd(5))} ${line.message}`)
+        .join("\n");
+
+    case "ping":
+      return `${green("pong")} ${dim(`${result.latencyMs}ms`)}`;
+
+    case "copy":
+      return [
+        `${green("copied")} ${result.roots.length} root(s), ${bytes(result.size)}`,
+        ...result.roots.map((r) => `  ${r.path} ${dim(r.class)}`),
+      ].join("\n");
+
+    case "paste":
+      return [
+        `${green("pasted")} ${result.count} root(s) into ${result.to}`,
+        ...result.roots.map((r) => `  ${r.path} ${dim(r.class)}`),
+      ].join("\n");
+
+    case "capabilities":
+      return [
+        `plugin ${bold(result.pluginVersion)}  protocol ${result.protocolVersion}`,
+        `place  ${result.place.name} ${dim(`(${result.place.placeId})`)}`,
+        "features:",
+        ...Object.entries(result.features).map(([k, v]) => `  ${v ? green("✓") : red("✗")} ${k}`),
+        `ops: ${dim(result.ops.join(", "))}`,
+      ].join("\n");
+
+    default:
+      return JSON.stringify(result, null, 2);
+  }
+}
+
+const levelColour = (level) => (level === "error" ? red : level === "warn" ? cyan : dim);
+
+function bytes(n) {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / 1024 / 1024).toFixed(1)} MB`;
+}
+
+/** The help screen, derived from the command table. */
+export function help() {
+  const lines = [bold("msync") + dim(" — Roblox Studio from the command line"), ""];
+
+  for (const group of GROUPS) {
+    const entries = Object.entries(COMMANDS).filter(([, spec]) => spec.group === group);
+    if (!entries.length) continue;
+
+    lines.push(bold(group));
+    const width = Math.max(...entries.map(([name]) => name.length));
+
+    for (const [name, spec] of entries) {
+      lines.push(`  ${cyan(name.padEnd(width))}  ${spec.summary}`);
+    }
+    lines.push("");
+  }
+
+  lines.push(dim("--raw for JSON · --port to target another daemon · msync <command> --help"));
+  return lines.join("\n");
+}
+
+/** Per-command help, also derived. */
+export function commandHelp(name) {
+  const spec = COMMANDS[name];
+  if (!spec) return `no such command: ${name}`;
+
+  const lines = [`${bold(name)} — ${spec.summary}`];
+
+  if (spec.positional) {
+    const required = (spec.positional.required ?? []).map((a) => `<${a}>`);
+    const optional = (spec.positional.optional ?? []).map((a) => `[${a}]`);
+    lines.push("", `  msync ${name} ${[...required, ...optional].join(" ")}`.trimEnd());
+  } else if (spec.variadic) {
+    lines.push("", `  msync ${name} [${spec.variadic}...]`);
+  }
+
+  if (spec.flags) {
+    lines.push("", bold("Flags"));
+    const width = Math.max(...Object.keys(spec.flags).map((f) => f.length));
+    for (const [flag, description] of Object.entries(spec.flags)) {
+      lines.push(`  --${flag.padEnd(width)}  ${description}`);
+    }
+  }
+
+  if (spec.examples?.length) {
+    lines.push("", bold("Examples"), ...spec.examples.map((e) => `  ${dim(e)}`));
+  }
+
+  return lines.join("\n");
+}
