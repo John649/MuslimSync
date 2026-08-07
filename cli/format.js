@@ -211,7 +211,7 @@ function bytes(n) {
 }
 
 /** The help screen, derived from the command table. */
-export function help() {
+export function help(custom = []) {
   const lines = [bold("msync") + dim(" — Roblox Studio from the command line"), ""];
 
   for (const group of GROUPS) {
@@ -224,6 +224,13 @@ export function help() {
     for (const [name, spec] of entries) {
       lines.push(`  ${cyan(name.padEnd(width))}  ${spec.summary}`);
     }
+    lines.push("");
+  }
+
+  if (custom.length) {
+    lines.push(bold("Custom"));
+    const width = Math.max(...custom.map((c) => c.name.length));
+    for (const command of custom) lines.push(`  ${cyan(command.name.padEnd(width))}  ${command.description}`);
     lines.push("");
   }
 

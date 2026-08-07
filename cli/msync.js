@@ -10,6 +10,10 @@ import { COMMANDS, registry } from "./commands.js";
 import { render, help, commandHelp, red, dim } from "./format.js";
 import { writeFileSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { discover, bindArgs, run as runCommand } from "../daemon/commands.js";
+
+const APP_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 const DEFAULT_PORT = 7900;
 
@@ -122,6 +126,44 @@ async function local(name, { flags, port }) {
   }
 }
 
+/**
+ * Runs a custom command.
+ *
+ * `ctx` is the same op surface the CLI uses — a custom command can do exactly
+ * what a built-in can, and nothing more.
+ */
+async function runCustom(command, flags, port) {
+  const ctx = {
+    op: (op, args = {}) => daemon(port, "/op", { op, args, timeoutMs: 120000 }),
+    photo: async ({ region, out }) => {
+      const args = {};
+      if (region) {
+        const [x, y, width, height] = String(region).split(",").map(Number);
+        args.region = { x, y, width, height };
+      }
+      const result = await daemon(port, "/op", { op: "photo", args, timeoutMs: 120000 });
+      result.file = await writePhoto(port, result, { out });
+      return result;
+    },
+  };
+
+  const result = await runCommand(command, {
+    args: bindArgs(command, flags),
+    ctx,
+    // Progress goes to stderr so `--raw` piped to jq stays clean JSON.
+    log: (message) => process.stderr.write(`${dim(message)}\n`),
+  });
+
+  process.stdout.write(`${flags.raw ? JSON.stringify(result ?? null, null, 2) : formatCustom(result)}\n`);
+  return EXIT.ok;
+}
+
+function formatCustom(result) {
+  if (result === null || result === undefined) return dim("(done)");
+  if (typeof result !== "object") return String(result);
+  return JSON.stringify(result, null, 2);
+}
+
 /** Reads a capture artifact, encodes it, and writes the file. */
 async function writePhoto(port, result, flags) {
   const { encodePng } = await import("../daemon/png.js");
@@ -196,13 +238,19 @@ async function main(argv) {
   const port = Number(flags.port ?? process.env.MUSLIMSYNC_PORT ?? DEFAULT_PORT);
 
   if (!command || command === "help") {
-    process.stdout.write(`${help()}\n`);
+    const { commands: custom } = discover({ project: process.cwd(), appRoot: APP_ROOT });
+    process.stdout.write(`${help(custom)}\n`);
     return EXIT.ok;
   }
 
   const spec = COMMANDS[command];
 
   if (!spec) {
+    // A name we do not know might be a command the user dropped in a folder.
+    const custom = discover({ project: process.cwd(), appRoot: APP_ROOT }).commands.find((c) => c.name === command);
+
+    if (custom) return runCustom(custom, flags, port);
+
     process.stderr.write(`${red("unknown command")}: ${command}\n\n${help()}\n`);
     return EXIT.usage;
   }

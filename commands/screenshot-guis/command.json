@@ -1,0 +1,10 @@
+{
+  "name": "screenshot-guis",
+  "description": "Photograph every ScreenGui in StarterGui to a folder",
+  "category": "Capture",
+  "args": {
+    "out": { "type": "string", "default": "./captures", "help": "output directory" },
+    "region": { "type": "string", "default": "", "help": "x,y,w,h to crop each shot" }
+  },
+  "examples": ["msync screenshot-guis --out ./shots"]
+}
