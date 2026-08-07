@@ -175,10 +175,25 @@ export const COMMANDS = {
     op: "playtest_exec",
     group: "Playtest",
     summary: "Run Luau inside a playtest context",
-    positional: { required: ["source"] },
-    flags: { context: "server (default) or client" },
+    positional: { optional: ["source"] },
+    flags: { context: "server (default) or client", script: "read the source from a file instead" },
     timeoutMs: 30000,
-    examples: ["msync run 'return #game.Players:GetPlayers()'", "msync run --context client 'return 1'"],
+    examples: [
+      "msync run 'return #game.Players:GetPlayers()'",
+      "msync run --script checks/spawn.luau --context client",
+    ],
+  },
+  test: {
+    local: "test",
+    group: "Playtest",
+    summary: "Run a Luau file in a fresh playtest and report pass or fail",
+    positional: { required: ["file"] },
+    flags: {
+      context: "server (default) or client",
+      mode: "play (default), run, or multiplayer",
+      players: "PlayClients in multiplayer mode (1-8)",
+    },
+    examples: ["msync test checks/spawn.luau", "msync test checks/net.luau --mode multiplayer --players 2"],
   },
 
   // ------------------------------------------------------------- transfer

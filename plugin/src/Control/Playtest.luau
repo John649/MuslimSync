@@ -84,7 +84,7 @@ end
 ---
 --- The script is destroyed whether it succeeds or fails, so a playtest does not
 --- accumulate debris from repeated calls.
-function Playtest._execute(source: string): (boolean, string)
+function Playtest._execute(source: string): (boolean, string, boolean)
 	if source == "" then
 		return false, "source is required"
 	end
@@ -116,24 +116,40 @@ function Playtest._execute(source: string): (boolean, string)
 	done.Parent = holder
 
 	local runner = Instance.new(class :: any)
-	runner.Name = "Runner" -- The user's source becomes the body of a function, so `return` works the -- way it does in an eval and the result comes back through the event.
-	(runner :: any).Source = table.concat({
+	runner.Name = "Runner"
+
+	-- The user's source becomes the body of a function, so `return` works the
+	-- way it does in an eval and the result comes back through the event.
+	--
+	-- A table result is JSON-encoded rather than tostring'd: a check that
+	-- returns { player = "x", health = 100 } should arrive as that, not as
+	-- "table: 0x033c3ab2bf110f56".
+	local body = table.concat({
 		'local done = script.Parent:WaitForChild("Done")',
+		'local http = game:GetService("HttpService")',
 		"local ok, result = pcall(function()",
 		source,
 		"end)",
-		"done:Fire(ok, if ok then tostring(result) else tostring(result))",
-	}, "\n")
+		"local encoded, json = false, nil",
+		'if ok and type(result) == "table" then',
+		"\tencoded, json = pcall(function() return http:JSONEncode(result) end)",
+		"end",
+		"done:Fire(ok, if encoded then json else tostring(result), encoded)",
+	}, "\n");
+
+	(runner :: any).Source = body
 	runner.Parent = holder
 
 	local finished = false
 	local succeeded = false
 	local output = "nil"
+	local isJson = false
 
-	done.Event:Connect(function(ok, result)
+	done.Event:Connect(function(ok, result, encoded)
 		finished = true
 		succeeded = ok
 		output = tostring(result)
+		isJson = encoded == true
 	end)
 
 	holder.Parent = container
@@ -147,10 +163,10 @@ function Playtest._execute(source: string): (boolean, string)
 	holder:Destroy()
 
 	if not finished then
-		return false, `execution did not finish within {EXEC_TIMEOUT}s`
+		return false, `execution did not finish within {EXEC_TIMEOUT}s`, false
 	end
 
-	return succeeded, output
+	return succeeded, output, isJson
 end
 
 -- --------------------------------------------------------------- runtime
@@ -173,10 +189,13 @@ local function startRuntimeAgent()
 		local reply: { [string]: any } = { kind = "muslimsync-playtest", t = "res", id = frame.id }
 
 		if frame.op == "exec" then
-			local ran, result = Playtest._execute(tostring(frame.source or ""))
+			local ran, result, encoded = Playtest._execute(tostring(frame.source or ""))
 			reply.ok = ran
 			reply.value = if ran then result else nil
 			reply.error = if ran then nil else result
+			-- Says how to read `value`, so the far end never has to guess
+			-- whether a string is JSON or just a string that looks like it.
+			reply.json = encoded
 		elseif frame.op == "endtest" then
 			-- EndTest is the runtime's own call to make; edit mode has no test
 			-- to end. It also requires a result argument.

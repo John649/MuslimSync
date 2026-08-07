@@ -3,6 +3,7 @@
 // `--raw` prints the JSON verbatim; everything here is for the other case. The
 // aim is that a human reading a terminal sees the answer, not a data structure.
 
+import { decodeValue } from "./playtest.js";
 import { COMMANDS, GROUPS } from "./commands.js";
 
 const isTTY = process.stdout.isTTY;
@@ -198,9 +199,17 @@ export function render(command, result) {
     case "stop":
       return `${green("stopped")}`;
 
-    case "run":
+    case "run": {
       if (result.ok === false) return `${red("error")} ${result.error}`;
-      return `${dim(result.context)}  ${result.value ?? dim("nil")}`;
+
+      // Decoded the same way `msync test` decodes it: the same script through
+      // two commands should not print two different shapes.
+      const value = decodeValue(result);
+
+      if (value === null) return `${dim(result.context)}  ${dim("nil")}`;
+
+      return `${dim(result.context)}  ${typeof value === "object" ? JSON.stringify(value, null, 2) : value}`;
+    }
 
     case "capabilities":
       return [

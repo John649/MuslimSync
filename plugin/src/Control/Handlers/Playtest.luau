@@ -14,6 +14,9 @@ local Bridge = require(MuslimSync.Control.Playtest)
 
 local MAX_PLAYERS = 8
 
+-- EndTest is asynchronous; this is how long the contexts get to drain
+local STOP_TIMEOUT = 10
+
 local function fail(code: string, message: string): never
 	error({ code = code, message = message }, 0)
 end
@@ -89,10 +92,23 @@ return function(_context)
 
 			-- Relayed to the server context: StudioTestService:EndTest belongs to
 			-- the DataModel being tested, and edit mode has no test to end.
-			local reply = Bridge.request("server", "endtest", {})
+			--
+			-- The reply is not waited on, because EndTest tears down the very
+			-- context that would send it — asking for an acknowledgement from a
+			-- process we just asked to die reports a timeout for a stop that
+			-- worked. The contexts draining is the real signal.
+			task.spawn(function()
+				Bridge.request("server", "endtest", {})
+			end)
 
-			if not reply.ok then
-				fail("PLUGIN_ERROR", `could not stop the playtest: {tostring(reply.error)}`)
+			local deadline = os.clock() + STOP_TIMEOUT
+
+			while #Bridge.contexts() > 0 do
+				if os.clock() > deadline then
+					fail("PLUGIN_ERROR", `the playtest was still running {STOP_TIMEOUT}s after EndTest`)
+				end
+
+				task.wait(0.1)
 			end
 
 			return { stopped = true }
@@ -118,7 +134,7 @@ return function(_context)
 				return { ok = false, error = tostring(reply.error) }
 			end
 
-			return { ok = true, context = name, value = reply.value }
+			return { ok = true, context = name, value = reply.value, json = reply.json == true }
 		end,
 
 		--- Round-trips a named context, to check the bridge itself.

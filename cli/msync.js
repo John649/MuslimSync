@@ -8,10 +8,11 @@
 import { parse, bind, coerce, UsageError } from "./args.js";
 import { COMMANDS, registry } from "./commands.js";
 import { render, help, commandHelp, red, dim } from "./format.js";
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { discover, bindArgs, run as runCommand } from "../daemon/commands.js";
+import { runTest, formatVerdict, TestFailure } from "./playtest.js";
 
 const APP_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -24,6 +25,9 @@ const EXIT = {
   notConnected: 3,
   pluginError: 4,
   daemonDown: 5,
+  // A failing test is not a broken tool. It gets its own code so CI can tell
+  // "the test said no" from "the tool could not run it".
+  testFailed: 6,
 };
 
 async function daemon(port, route, body) {
@@ -60,7 +64,7 @@ class Fatal extends Error {
 }
 
 /** Commands answered without touching the plugin. */
-async function local(name, { flags, port }) {
+async function local(name, { flags, positionals = [], port }) {
   switch (name) {
     case "help":
       return { text: help() };
@@ -119,6 +123,37 @@ async function local(name, { flags, port }) {
           dim(`— ${verse.surah.name} ${verse.ref}`),
         ].join("\n"),
       };
+    }
+
+    case "test": {
+      const file = positionals[0];
+      if (!file) throw new UsageError("test needs a file");
+
+      let source;
+      try {
+        source = readFileSync(file, "utf8");
+      } catch {
+        throw new Fatal(EXIT.usage, `cannot read ${file}`);
+      }
+
+      const op = (name, args = {}) => daemon(port, "/op", { op: name, args, timeoutMs: 120000 });
+
+      try {
+        const verdict = await runTest(op, {
+          source,
+          context: flags.context ?? "server",
+          mode: flags.mode ?? "play",
+          players: flags.players === undefined ? undefined : Number(flags.players),
+          log: (message) => process.stderr.write(`${dim(message)}\n`),
+        });
+
+        return { json: verdict, text: formatVerdict(verdict) };
+      } catch (cause) {
+        if (cause instanceof TestFailure) {
+          throw new Fatal(EXIT.testFailed, `FAIL  ${cause.context}\n${cause.message}`);
+        }
+        throw cause;
+      }
     }
 
     default:
@@ -273,7 +308,7 @@ async function main(argv) {
   }
 
   if (spec.local) {
-    const result = await local(spec.local, { flags, port });
+    const result = await local(spec.local, { flags, positionals, port });
     process.stdout.write(`${flags.raw ? JSON.stringify(result.json ?? null, null, 2) : result.text}\n`);
     return EXIT.ok;
   }
@@ -281,9 +316,21 @@ async function main(argv) {
   // Latency is a property of the round trip, which only this end can see —
   // the plugin has no idea when the request left.
   const startedAt = Date.now();
+  const args = opArguments(command, spec, positionals, flags);
+
+  // `--script` is sugar for pasting a file into the source argument, which is
+  // what anyone doing this by hand ends up writing anyway.
+  if (flags.script) {
+    try {
+      args.source = readFileSync(flags.script, "utf8");
+    } catch {
+      throw new Fatal(EXIT.usage, `cannot read ${flags.script}`);
+    }
+  }
+
   const result = await daemon(port, "/op", {
     op: spec.op,
-    args: opArguments(command, spec, positionals, flags),
+    args,
     // A capture ships megabytes of RGBA through base64 chunks; the default is
     // sized for reads that answer instantly.
     timeoutMs: spec.timeoutMs,
