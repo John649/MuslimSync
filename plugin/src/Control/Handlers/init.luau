@@ -37,6 +37,7 @@ local context = {
 
 local MODULES = {
 	require(script.Core),
+	require(script.Tree),
 }
 
 for _, factory in MODULES do

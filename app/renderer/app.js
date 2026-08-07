@@ -16,6 +16,8 @@ const el = {
   statusLeft: document.getElementById("status-left"),
   dot: document.getElementById("daemon-dot"),
   rail: document.getElementById("rail-projects"),
+  projectList: document.getElementById("project-list"),
+  projectsEmpty: document.getElementById("projects-empty"),
 };
 
 // Captured before any swap so the icon can be restored exactly.
@@ -128,6 +130,50 @@ function renderRail(plugins) {
 
 api.daemon.onChange(renderStatus);
 api.daemon.status().then(renderStatus);
+
+// ------------------------------------------------------------- projects
+
+// Built with DOM calls, not an HTML string: project names and paths come off
+// the user's disk and are not ours to treat as markup.
+function renderProjects({ projects }) {
+  el.projectList.replaceChildren();
+
+  const any = projects.length > 0;
+  el.projectList.classList.toggle("is-hidden", !any);
+  el.projectsEmpty.classList.toggle("is-hidden", any);
+
+  for (const project of projects) {
+    const row = document.createElement("li");
+    row.className = "project";
+
+    const dot = document.createElement("span");
+    dot.className = `project-dot${project.running ? " is-serving" : ""}`;
+
+    const copy = document.createElement("span");
+    copy.className = "project-copy";
+
+    const name = document.createElement("span");
+    name.className = "project-name";
+    name.textContent = project.name;
+
+    const meta = document.createElement("span");
+    meta.className = "project-meta";
+    meta.textContent = project.running ? `${project.host}:${project.port} — ${project.path}` : project.path;
+
+    const state = document.createElement("span");
+    state.className = "project-state";
+    state.textContent = project.running ? "serving" : "idle";
+
+    copy.append(name, meta);
+    row.append(dot, copy, state);
+    el.projectList.append(row);
+  }
+}
+
+const loadProjects = () => api.projects.list().then(renderProjects);
+
+api.projects.onChange(loadProjects);
+loadProjects();
 
 // ------------------------------------------------------------ navigation
 

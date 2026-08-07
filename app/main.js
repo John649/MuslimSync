@@ -6,6 +6,7 @@ import { verseOfTheDay, poolRefs, resolve, dayNumber } from "../quran/daily.js";
 import { Daemon } from "../daemon/index.js";
 import { ArgonProcesses } from "../daemon/argon.js";
 import { createRoutes } from "../daemon/routes.js";
+import * as projects from "../daemon/projects.js";
 import { shouldFire, msUntilNextCheck } from "./reminder.js";
 import * as settings from "./settings.js";
 
@@ -103,6 +104,9 @@ function daemonStatus() {
 
 function publishStatus() {
   window?.webContents.send("daemon:status", daemonStatus());
+  // Serving state is part of what the projects list shows, so the two are
+  // refreshed together rather than leaving the list stale until a click.
+  window?.webContents.send("projects:changed");
 }
 
 async function startDaemon() {
@@ -145,6 +149,11 @@ async function startDaemon() {
 // --------------------------------------------------------------------- ipc
 
 ipcMain.handle("daemon:status", () => daemonStatus());
+
+ipcMain.handle("projects:list", () => {
+  const { projectsRoot } = settings.read();
+  return { root: projectsRoot, projects: projects.list(projectsRoot, { running: argon?.running ?? new Map() }) };
+});
 
 ipcMain.handle("verse:today", () => {
   const current = settings.read();

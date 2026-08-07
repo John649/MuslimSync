@@ -125,6 +125,15 @@ function Control:onFrame(raw: string)
 
 		if succeeded then
 			self:respond(id, true, result)
+		elseif type(result) == "table" and type(result.code) == "string" then
+			-- Handlers raise structured errors so callers can branch on a code
+			-- rather than parse prose. Flattening these to PLUGIN_ERROR would
+			-- throw away the only machine-readable part.
+			self:respond(id, false, {
+				code = result.code,
+				message = tostring(result.message),
+				retryable = result.retryable == true,
+			})
 		else
 			self:respond(id, false, {
 				code = "PLUGIN_ERROR",

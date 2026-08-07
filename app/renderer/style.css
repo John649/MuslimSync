@@ -1,3 +1,15 @@
+/* Amiri, bundled. System Arabic faces do not carry the Quranic annotation
+ * marks Uthmani text uses — U+06E1, U+06DA, U+06E5 and friends rendered as
+ * tofu boxes mid-verse. Amiri covers them. SIL Open Font License. */
+@font-face {
+  font-family: "Amiri";
+  src: url("fonts/amiri-arabic-400.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0600-06FF, U+0750-077F, U+08A0-08FF, U+FB50-FDFF, U+FE70-FEFF;
+}
+
 /* MuslimSync — Discord-flavoured shell.
  *
  * Discord's surface ladder and metrics, because the structure maps cleanly:
@@ -33,9 +45,9 @@
 
   --sans: "gg sans", -apple-system, BlinkMacSystemFont, "Noto Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  /* Faces that ship with macOS and Windows and render Uthmani diacritics
-     correctly. Amiri is not bundled yet. */
-  --arabic: "SF Arabic", "Geeza Pro", "Al Bayan", "Traditional Arabic", "Segoe UI", serif;
+  /* Amiri first: it is the only one of these guaranteed to have the Quranic
+     annotation marks. The rest are fallbacks if the bundled file fails. */
+  --arabic: "Amiri", "SF Arabic", "Geeza Pro", "Al Bayan", "Traditional Arabic", "Segoe UI", serif;
 
   --ease: cubic-bezier(0.2, 0, 0, 1);
   --elevation-low: 0 1px 0 rgba(4, 4, 5, 0.2), 0 1.5px 0 rgba(6, 6, 7, 0.05), 0 2px 0 rgba(4, 4, 5, 0.05);
@@ -771,4 +783,80 @@ strong {
 
 .switch input:focus-visible + .switch-track {
   box-shadow: 0 0 0 3px rgba(59, 165, 93, 0.35);
+}
+
+/* ------------------------------------------------------- project list */
+
+.projects {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.projects.is-hidden {
+  display: none;
+}
+
+.project {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+
+.project-dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--faint);
+}
+
+.project-dot.is-serving {
+  background: var(--online);
+  box-shadow: 0 0 0 3px rgba(35, 165, 89, 0.18);
+}
+
+.project-copy {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.project-name {
+  color: var(--fg);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.project-meta {
+  overflow: hidden;
+  color: var(--channel);
+  font-family: var(--mono);
+  font-size: 11.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-state {
+  flex: 0 0 auto;
+  color: var(--channel);
+  font-size: 12px;
+}
+
+/* ------------------------------------------------------------- utilities */
+
+/* Last in the file on purpose. `.is-hidden` and a component rule like `.hero`
+   have the same specificity, so whichever comes later wins — placing this
+   earlier meant `.hero { display: flex }` silently overrode it and the projects
+   empty state stayed on screen underneath the real list. */
+.is-hidden {
+  display: none;
 }
