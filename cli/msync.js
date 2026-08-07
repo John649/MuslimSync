@@ -223,6 +223,11 @@ function opArguments(name, spec, positionals, flags) {
   // `out` names a local file; the plugin has no use for it.
   delete rest.out;
 
+  // --props Name,Text is friendlier than repeating a flag or writing JSON.
+  if (name === "query" && typeof rest.props === "string") {
+    rest.props = rest.props.split(",").map((part) => part.trim()).filter(Boolean);
+  }
+
   if (spec.variadic) {
     return { ...coerceAll(rest), [spec.variadic]: positionals.length ? positionals : undefined };
   }

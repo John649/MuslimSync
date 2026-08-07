@@ -50,6 +50,7 @@ local MODULES = {
 	require(script.Runtime),
 	require(script.Capture),
 	require(script.Playtest),
+	require(script.Query),
 }
 
 for _, factory in MODULES do

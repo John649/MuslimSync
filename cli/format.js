@@ -104,6 +104,20 @@ export function render(command, result) {
       return [...rows.length ? rows : [dim("  (no matches)")], note].join("\n");
     }
 
+    case "query": {
+      const rows = (result.matches ?? []).map((m) => {
+        const props = m.properties
+          ? "  " + Object.entries(m.properties).map(([k, v]) => `${dim(k)}=${value(v)}`).join(" ")
+          : "";
+        return `  ${m.path} ${dim(m.class)}${props}`;
+      });
+      const note = dim(
+        `${result.matches.length} match(es), visited ${result.visited}` +
+          (result.truncated ? `, truncated (${result.truncationReason})` : ""),
+      );
+      return [...(rows.length ? rows : [dim("  (no matches)")]), note].join("\n");
+    }
+
     case "source":
       return result.source ?? "";
 

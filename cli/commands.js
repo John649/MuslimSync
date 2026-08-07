@@ -44,6 +44,14 @@ export const COMMANDS = {
     positional: { required: ["path"] },
     examples: ["msync source ReplicatedStorage/Config"],
   },
+  query: {
+    op: "query",
+    group: "Navigate",
+    summary: "Match a selector against the live tree",
+    positional: { required: ["selector"] },
+    flags: { class: "only instances of this class", props: "comma-separated properties to include" },
+    examples: ["msync query 'StarterGui/**/TextButton'", "msync query 'Workspace/*' --class Model"],
+  },
   find: {
     op: "find",
     group: "Navigate",
