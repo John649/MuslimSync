@@ -62,6 +62,7 @@ Branch on these rather than parsing prose.
 | 4 | the plugin refused | read the message; it names the cause |
 | 5 | no daemon | ask the user to start the MuslimSync app |
 | 6 | a test failed | the place is wrong, not the tool |
+| 7 | the setup is broken | run \`msync doctor\`; it says what to fix |
 
 ## Adding a command
 
@@ -122,7 +123,6 @@ const REPO = `## Working on this repo
 
 \`\`\`bash
 npm run check                     # tests, plugin lint, file-size gate, this file's drift gate
-npm run smoke                     # all 36 commands against a live Studio
 npm run build:plugin -- --install # build the plugin into Studio's plugins folder
 npm run gen:agents                # regenerate the tool section below
 \`\`\`

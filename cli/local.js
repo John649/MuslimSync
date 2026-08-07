@@ -10,7 +10,8 @@ import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { registry } from "./commands.js";
-import { help, dim } from "./format.js";
+import { help, dim, green, cyan, red } from "./format.js";
+import { diagnose, formatReport } from "./doctor.js";
 import { renderAgentsMd, mergeInto, groupNames } from "./agents.js";
 import { runTest, formatVerdict, TestFailure } from "./playtest.js";
 import { UsageError } from "./args.js";
@@ -133,6 +134,31 @@ export async function local(name, { flags, positionals = [], port, daemon, Fatal
           dim(`— ${verse.surah.name} ${verse.ref}`),
         ].join("\n"),
       };
+    }
+
+    case "doctor": {
+      const { read, DIR } = await import("../app/settings.js");
+      void DIR;
+
+      const results = await diagnose({
+        port,
+        projectsRoot: read().projectsRoot,
+        appRoot: path.resolve(path.dirname(new URL(import.meta.url).pathname), ".."),
+        // Only reached when a plugin is connected, so a missing daemon does not
+        // turn one problem into two.
+        op: (name, args) => daemon(port, "/op", { op: name, args, timeoutMs: 10000 }),
+      });
+
+      const text = formatReport(results, { green, cyan, red, dim });
+
+      // A failing check is a non-zero exit so this can gate a script, but the
+      // report still prints — the whole point is reading it.
+      if (results.some((result) => result.level === "fail")) {
+        process.stdout.write(`${text}\n`);
+        throw new Fatal(EXIT.unhealthy, "");
+      }
+
+      return { json: results, text };
     }
 
     case "test": {

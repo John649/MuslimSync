@@ -146,6 +146,7 @@ Branch on these rather than parsing prose.
 | 4 | the plugin refused |
 | 5 | no daemon — is the app running? |
 | 6 | a test failed |
+| 7 | the setup is broken — `msync doctor` says what |
 
 ## Custom commands
 
@@ -193,15 +194,10 @@ AGENTS.md is left alone.
 
 ```bash
 npm run check          # tests, plugin lint, file-size gate, AGENTS.md drift
-npm run smoke          # every command against a live Studio (needs one connected)
 npm run dev:plugin     # rebuild and reinstall the plugin on change
 npm run build:quran    # regenerate quran/quran.json from source
 ```
 
-`npm run check` is offline and fast. `npm run smoke` is the one that catches an
-op that no longer exists in the plugin, or a Roblox API that changed underneath
-you — it builds everything inside one scratch folder and destroys it, so it is
-safe to point at a place you care about. `--quick` skips captures and playtests.
 
 Files are capped at 400 lines by `scripts/check-file-size.mjs`, with an explicit
 grandfather list. The cap is there to keep a file readable in one sitting.

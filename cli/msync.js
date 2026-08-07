@@ -30,6 +30,9 @@ const EXIT = {
   // A failing test is not a broken tool. It gets its own code so CI can tell
   // "the test said no" from "the tool could not run it".
   testFailed: 6,
+  // doctor found something wrong with the setup. Not a plugin error: the
+  // plugin may be the very thing that is missing.
+  unhealthy: 7,
 };
 
 async function daemon(port, route, body) {
@@ -316,7 +319,10 @@ main(process.argv.slice(2))
     }
 
     if (error instanceof Fatal) {
-      process.stderr.write(`${red(error.code ?? "error")}: ${error.message}\n`);
+      // An empty message means the command already printed everything worth
+      // saying — doctor's report is the output, and a bare "error:" under it
+      // adds nothing.
+      if (error.message) process.stderr.write(`${red(error.code ?? "error")}: ${error.message}\n`);
       process.exit(error.exit);
     }
 

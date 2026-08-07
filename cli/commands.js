@@ -220,6 +220,12 @@ export const COMMANDS = {
   projects: { local: "projects", group: "Info", summary: "List known projects" },
   commands: { local: "commands", group: "Info", summary: "Machine-readable command registry" },
   verse: { local: "verse", group: "Deen", summary: "Today's verse" },
+  doctor: {
+    local: "doctor",
+    group: "Info",
+    summary: "Check the setup and say what to fix",
+    examples: ["msync doctor"],
+  },
   help: { local: "help", group: "Info", summary: "Show this help" },
   agents: {
     local: "agents",
