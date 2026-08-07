@@ -30,8 +30,18 @@ From a checkout of the fork:
 On Windows that is all it takes. Cross-compiling from macOS does not work out of
 the box — `ring` needs a C compiler targeting MSVC, and the Windows SDK headers
 are not there. `cargo-xwin` handles it if you want to cross-compile, at the cost
-of downloading Microsoft SDK components; building on a Windows machine or in CI
-avoids that entirely.
+of downloading Microsoft SDK components.
+
+CI avoids the problem entirely by building each target on its own runner. The
+fork has a `binaries` workflow for this; run it from the Actions tab and it
+produces one artifact per platform, named for where the binary goes:
+
+    windows-x86_64  ->  vendor/argon/windows-x86_64/argon.exe
+    darwin-arm64    ->  vendor/argon/darwin-arm64/argon
+    darwin-x64      ->  vendor/argon/darwin-x64/argon
+    linux-x86_64    ->  vendor/argon/linux-x86_64/argon
+
+Download, unzip into the matching folder, and `chmod +x` on POSIX.
 
 ## Version
 
