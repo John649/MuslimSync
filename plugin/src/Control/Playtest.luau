@@ -19,6 +19,7 @@ local MuslimSync = script:FindFirstAncestor("MuslimSync")
 local Log = require(MuslimSync.Log)
 
 local REQUEST_TIMEOUT = 15
+local EXEC_TIMEOUT = 10
 local MAX_OUTPUT = 100
 
 local Playtest = {}
@@ -72,6 +73,86 @@ local function send(connection: any, payload: { [string]: any }): boolean
 	return sent
 end
 
+-- --------------------------------------------------------------- execute
+
+--- Runs source inside the playtest by injecting a temporary script.
+---
+--- `loadstring` is unavailable here: a plugin clone in a playtest runs with
+--- game security, not plugin security, and Studio refuses the call outright.
+--- Injecting a real Script is the only way to run arbitrary source in a live
+--- game, which is what Ro Sync settled on too.
+---
+--- The script is destroyed whether it succeeds or fails, so a playtest does not
+--- accumulate debris from repeated calls.
+function Playtest._execute(source: string): (boolean, string)
+	if source == "" then
+		return false, "source is required"
+	end
+
+	local isServer = RunService:IsServer()
+
+	local container: Instance
+	local class: string
+
+	if isServer then
+		container = game:GetService("ServerScriptService")
+		class = "Script"
+	else
+		local player = game:GetService("Players").LocalPlayer
+
+		if not player then
+			return false, "no LocalPlayer yet — the client is still joining"
+		end
+
+		container = player:WaitForChild("PlayerScripts", 5) or player
+		class = "LocalScript"
+	end
+
+	local holder = Instance.new("Folder")
+	holder.Name = "MuslimSyncExec"
+
+	local done = Instance.new("BindableEvent")
+	done.Name = "Done"
+	done.Parent = holder
+
+	local runner = Instance.new(class :: any)
+	runner.Name = "Runner" -- The user's source becomes the body of a function, so `return` works the -- way it does in an eval and the result comes back through the event.
+	(runner :: any).Source = table.concat({
+		'local done = script.Parent:WaitForChild("Done")',
+		"local ok, result = pcall(function()",
+		source,
+		"end)",
+		"done:Fire(ok, if ok then tostring(result) else tostring(result))",
+	}, "\n")
+	runner.Parent = holder
+
+	local finished = false
+	local succeeded = false
+	local output = "nil"
+
+	done.Event:Connect(function(ok, result)
+		finished = true
+		succeeded = ok
+		output = tostring(result)
+	end)
+
+	holder.Parent = container
+
+	local deadline = os.clock() + EXEC_TIMEOUT
+
+	while not finished and os.clock() < deadline do
+		task.wait(0.05)
+	end
+
+	holder:Destroy()
+
+	if not finished then
+		return false, `execution did not finish within {EXEC_TIMEOUT}s`
+	end
+
+	return succeeded, output
+end
+
 -- --------------------------------------------------------------- runtime
 
 --- Runs in a PlayServer or PlayClient clone: answers requests from edit mode.
@@ -92,17 +173,19 @@ local function startRuntimeAgent()
 		local reply: { [string]: any } = { kind = "muslimsync-playtest", t = "res", id = frame.id }
 
 		if frame.op == "exec" then
-			local chunk, syntaxError = loadstring(tostring(frame.source or ""))
+			local ran, result = Playtest._execute(tostring(frame.source or ""))
+			reply.ok = ran
+			reply.value = if ran then result else nil
+			reply.error = if ran then nil else result
+		elseif frame.op == "endtest" then
+			-- EndTest is the runtime's own call to make; edit mode has no test
+			-- to end. It also requires a result argument.
+			local ended, err = pcall(function()
+				game:GetService("StudioTestService"):EndTest("stopped by MuslimSync")
+			end)
 
-			if not chunk then
-				reply.ok = false
-				reply.error = `syntax error: {tostring(syntaxError)}`
-			else
-				local ran, result = pcall(chunk :: any)
-				reply.ok = ran
-				reply.value = if ran then tostring(result) else nil
-				reply.error = if ran then nil else tostring(result)
-			end
+			reply.ok = ended
+			reply.error = if ended then nil else tostring(err)
 		elseif frame.op == "ping" then
 			reply.ok = true
 			reply.value = name
@@ -159,7 +242,9 @@ local function startRuntimeAgent()
 		end
 	end)
 
-	Log.trace("Playtest: runtime agent started as", name)
+	-- Info, not trace: this line is the only evidence the agent is alive inside
+	-- a clone, and Output is the only place it can surface.
+	Log.info(`Playtest: runtime agent ready as {name}`)
 end
 
 -- ------------------------------------------------------------------ edit
@@ -187,7 +272,7 @@ local function startEditCoordinator()
 			end
 
 			contexts[name] = { name = name, connection = connection, kind = tostring(frame.name), at = os.time() }
-			Log.trace("Playtest: runtime context connected:", name)
+			Log.info(`Playtest: runtime context connected: {name}`)
 			return
 		end
 

@@ -234,14 +234,14 @@ end
 local module = {}
 
 function module.start(host: string?, port: number?): Control?
-	-- A playtest clone cannot reach the daemon — only the edit-mode copy holds
-	-- the socket — so it starts the bridge agent and stops there. Edit mode
-	-- relays anything the clone is asked to do.
-	Bridge.start()
-
+	-- The clone's bridge is started by init.server.luau, which is the only code
+	-- that runs there at all. This path is edit mode, so it starts the edit-side
+	-- coordinator that collects runtime contexts.
 	if Bridge.isRuntime() then
 		return nil
 	end
+
+	Bridge.start()
 
 	local control = Control.new(host, port)
 	-- Handlers reach the daemon's HTTP routes directly for binary transport,

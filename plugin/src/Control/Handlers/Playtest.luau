@@ -87,12 +87,12 @@ return function(_context)
 				fail("CONFLICT", "no playtest is running")
 			end
 
-			local stopped, err = pcall(function()
-				service():EndTest()
-			end)
+			-- Relayed to the server context: StudioTestService:EndTest belongs to
+			-- the DataModel being tested, and edit mode has no test to end.
+			local reply = Bridge.request("server", "endtest", {})
 
-			if not stopped then
-				fail("PLUGIN_ERROR", `could not stop the playtest: {tostring(err)}`)
+			if not reply.ok then
+				fail("PLUGIN_ERROR", `could not stop the playtest: {tostring(reply.error)}`)
 			end
 
 			return { stopped = true }
