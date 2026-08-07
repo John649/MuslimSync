@@ -91,7 +91,12 @@ function checkArgon() {
     return fail("argon", `${binary} is not executable`, `chmod +x ${binary}`);
   }
 
-  return ok("argon", path.relative(process.cwd(), binary));
+  // Relative only when that is actually shorter and stays inside the tree:
+  // run from elsewhere, `path.relative` produces ../../Users/... which is
+  // longer than the truth and reads like the binary is somewhere odd.
+  const relative = path.relative(process.cwd(), binary);
+
+  return ok("argon", relative.startsWith("..") ? binary : relative);
 }
 
 /**

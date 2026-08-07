@@ -78,3 +78,12 @@ test("warnings alone do not read as problems", () => {
   assert.match(report, /no problems, 1 thing to know about/);
   assert.doesNotMatch(report, /to fix/);
 });
+
+test("the argon path is not relativised into nonsense from another directory", async () => {
+  // Run from outside the repo, path.relative gives ../../Users/... which is
+  // longer than the absolute path and reads like the binary is somewhere odd.
+  const results = await diagnose({ port: 1, projectsRoot: process.cwd(), appRoot: process.cwd() });
+  const argon = find(results, "argon");
+
+  assert.ok(!argon.detail.startsWith(".."), `argon path reads as ${argon.detail}`);
+});
