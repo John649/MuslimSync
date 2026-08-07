@@ -172,6 +172,22 @@ export function render(command, result) {
     case "authorize":
       return `${green("authorized")} ${dim("screen capture is available")}`;
 
+    case "playtest":
+      return `${green("playtest started")} ${dim(`${result.mode}${result.players > 1 ? `, ${result.players} players` : ""}`)}`;
+
+    case "playing": {
+      if (!result.running) return dim("no playtest running");
+      const rows = result.contexts.map((c) => `  ${c.name} ${dim(c.kind)}`);
+      return [`${green("running")} ${dim(`${result.contexts.length} context(s)`)}`, ...rows].join("\n");
+    }
+
+    case "stop":
+      return `${green("stopped")}`;
+
+    case "run":
+      if (result.ok === false) return `${red("error")} ${result.error}`;
+      return `${dim(result.context)}  ${result.value ?? dim("nil")}`;
+
     case "capabilities":
       return [
         `plugin ${bold(result.pluginVersion)}  protocol ${result.protocolVersion}`,

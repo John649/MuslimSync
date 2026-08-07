@@ -145,6 +145,28 @@ export const COMMANDS = {
     summary: "Ask Studio for screen capture permission",
   },
 
+  // ------------------------------------------------------------- playtest
+  playtest: {
+    op: "playtest_start",
+    group: "Playtest",
+    summary: "Start a playtest (play, run, or multiplayer)",
+    positional: { optional: ["mode"] },
+    flags: { players: "PlayClients in multiplayer mode (1-8)" },
+    timeoutMs: 30000,
+    examples: ["msync playtest", "msync playtest multiplayer --players 2"],
+  },
+  playing: { op: "playtest_status", group: "Playtest", summary: "Is a playtest running, and which contexts are up" },
+  stop: { op: "playtest_stop", group: "Playtest", summary: "End the running playtest" },
+  run: {
+    op: "playtest_exec",
+    group: "Playtest",
+    summary: "Run Luau inside a playtest context",
+    positional: { required: ["source"] },
+    flags: { context: "server (default) or client" },
+    timeoutMs: 30000,
+    examples: ["msync run 'return #game.Players:GetPlayers()'", "msync run --context client 'return 1'"],
+  },
+
   // ------------------------------------------------------------- transfer
   copy: {
     op: "clipboard_copy",
@@ -171,7 +193,7 @@ export const COMMANDS = {
 };
 
 /** Groups, in the order help should print them. */
-export const GROUPS = ["Navigate", "Write", "Studio", "Capture", "Transfer", "Info", "Deen"];
+export const GROUPS = ["Navigate", "Write", "Studio", "Capture", "Playtest", "Transfer", "Info", "Deen"];
 
 /** The registry an agent reads. Derived, never hand-maintained. */
 export function registry() {

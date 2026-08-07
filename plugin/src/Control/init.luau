@@ -10,13 +10,13 @@
 --   plugin -> daemon  {"t":"event", kind, ...}
 
 local HttpService = game:GetService("HttpService")
-local RunService = game:GetService("RunService")
 
 local MuslimSync = script:FindFirstAncestor("MuslimSync")
 
 local Log = require(MuslimSync.Log)
 
 local Handlers = require(script.Handlers)
+local Bridge = require(script.Playtest)
 
 local PROTOCOL = 1
 local DEFAULT_HOST = "127.0.0.1"
@@ -234,9 +234,12 @@ end
 local module = {}
 
 function module.start(host: string?, port: number?): Control?
-	-- Playtest clones must not open their own daemon connection; runtime work
-	-- is routed through the edit-mode plugin instead.
-	if RunService:IsRunning() then
+	-- A playtest clone cannot reach the daemon — only the edit-mode copy holds
+	-- the socket — so it starts the bridge agent and stops there. Edit mode
+	-- relays anything the clone is asked to do.
+	Bridge.start()
+
+	if Bridge.isRuntime() then
 		return nil
 	end
 
