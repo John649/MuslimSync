@@ -16,6 +16,12 @@ contextBridge.exposeInMainWorld("muslimsync", {
       ipcRenderer.on("verse:focus", () => handler());
     },
   },
+  daemon: {
+    status: () => ipcRenderer.invoke("daemon:status"),
+    onChange: (handler) => {
+      ipcRenderer.on("daemon:status", (_event, status) => handler(status));
+    },
+  },
   settings: {
     get: () => ipcRenderer.invoke("settings:get"),
     set: (patch) => ipcRenderer.invoke("settings:set", patch),

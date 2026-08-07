@@ -14,6 +14,8 @@ const el = {
   copy: document.getElementById("verse-copy"),
   card: document.getElementById("verse"),
   statusLeft: document.getElementById("status-left"),
+  dot: document.getElementById("daemon-dot"),
+  rail: document.getElementById("rail-projects"),
 };
 
 // Captured before any swap so the icon can be restored exactly.
@@ -73,6 +75,59 @@ api.verse.onFocus(() => {
   loadToday();
   el.card.scrollIntoView({ behavior: "smooth", block: "nearest" });
 });
+
+// ---------------------------------------------------------- daemon status
+
+// The dot is green only when a plugin is actually answering. A listening
+// daemon with nothing connected is not "online" from the user's point of view.
+function renderStatus(status) {
+  const connected = status.plugins?.length ?? 0;
+
+  el.dot.classList.toggle("is-live", connected > 0);
+  el.dot.title = connected > 0 ? `${connected} Studio place(s) connected` : "No Studio plugin connected";
+
+  if (status.error) el.statusLeft.textContent = status.error;
+  else if (connected > 0) el.statusLeft.textContent = connected === 1 ? "studio connected" : `${connected} places`;
+  else if (status.listening) el.statusLeft.textContent = `waiting on :${status.port}`;
+  else el.statusLeft.textContent = "daemon offline";
+
+  renderRail(status.plugins ?? []);
+}
+
+// Discord-style initials: first letter of each of the first two words. An
+// unnamed place (opened from a local file) falls back to its id, which is at
+// least stable and identifies the right one when several are open.
+function initials(plugin) {
+  const words = String(plugin.placeName ?? "").trim().split(/\s+/).filter(Boolean);
+  if (!words.length) return plugin.placeId.slice(-2);
+  return words.slice(0, 2).map((word) => word[0].toUpperCase()).join("");
+}
+
+// One rail icon per connected place. Built with DOM calls rather than an HTML
+// string: place names come from Studio and are not ours to trust as markup.
+function renderRail(plugins) {
+  el.rail.replaceChildren();
+
+  for (const plugin of plugins) {
+    const item = document.createElement("div");
+    item.className = "rail-item";
+
+    const pill = document.createElement("span");
+    pill.className = "rail-pill";
+
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "rail-button";
+    button.title = plugin.placeName ? `${plugin.placeName} (${plugin.placeId})` : `Place ${plugin.placeId}`;
+    button.textContent = initials(plugin);
+
+    item.append(pill, button);
+    el.rail.append(item);
+  }
+}
+
+api.daemon.onChange(renderStatus);
+api.daemon.status().then(renderStatus);
 
 // ------------------------------------------------------------ navigation
 

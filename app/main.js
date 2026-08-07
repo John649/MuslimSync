@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { verseOfTheDay, poolRefs, resolve, dayNumber } from "../quran/daily.js";
+import { Daemon } from "../daemon/index.js";
 import { shouldFire, msUntilNextCheck } from "./reminder.js";
 import * as settings from "./settings.js";
 
@@ -10,6 +11,10 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 
 let window = null;
 let reminderTimer = null;
+let daemon = null;
+// Held separately from daemon.status() so a failed start still has something
+// to show: "port in use" is exactly what the user needs to see.
+let daemonError = null;
 
 function createWindow() {
   window = new BrowserWindow({
@@ -87,7 +92,45 @@ function armReminder() {
   reminderTimer = setTimeout(armReminder, delay);
 }
 
+// ------------------------------------------------------------- the daemon
+
+function daemonStatus() {
+  return { ...(daemon?.status() ?? { listening: false, port: null, plugins: [] }), error: daemonError };
+}
+
+function publishStatus() {
+  window?.webContents.send("daemon:status", daemonStatus());
+}
+
+async function startDaemon() {
+  const { controlPort } = settings.read();
+
+  try {
+    daemon = new Daemon({ port: controlPort });
+    daemon.on("change", publishStatus);
+    // A plugin we cannot parse is worth surfacing rather than swallowing: it
+    // almost always means a version mismatch between app and plugin.
+    daemon.on("protocol-error", (error) => {
+      daemonError = `plugin protocol error: ${error.message}`;
+      publishStatus();
+    });
+
+    await daemon.start();
+    daemonError = null;
+  } catch (error) {
+    daemon = null;
+    daemonError =
+      error.code === "EADDRINUSE"
+        ? `port ${controlPort} is already in use — another MuslimSync may be running`
+        : error.message;
+  }
+
+  publishStatus();
+}
+
 // --------------------------------------------------------------------- ipc
+
+ipcMain.handle("daemon:status", () => daemonStatus());
 
 ipcMain.handle("verse:today", () => {
   const current = settings.read();
@@ -119,9 +162,13 @@ ipcMain.handle("settings:set", (_event, patch) => {
 
 // ------------------------------------------------------------------ startup
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   createWindow();
   armReminder();
+  await startDaemon();
+
+  // The renderer may have finished loading before the daemon did.
+  window?.webContents.on("did-finish-load", publishStatus);
 
   // A laptop that slept through the trigger wakes here. The timer that was
   // pending during sleep is unreliable, so re-evaluate against the real clock.
@@ -134,4 +181,16 @@ app.whenReady().then(() => {
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
+});
+
+// Release the port on the way out, or a relaunch hits EADDRINUSE against our
+// own orphaned listener.
+app.on("before-quit", async (event) => {
+  if (!daemon) return;
+  event.preventDefault();
+
+  const closing = daemon;
+  daemon = null;
+  await closing.stop();
+  app.quit();
 });

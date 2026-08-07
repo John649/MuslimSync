@@ -187,6 +187,7 @@ function Control:connect(): boolean
 		protocol = PROTOCOL,
 		placeId = tostring(game.PlaceId),
 		gameId = tostring(game.GameId),
+		placeName = game.Name,
 		pluginVersion = Handlers.version(),
 	})
 
