@@ -13,6 +13,20 @@ local function has(service: string, method: string): boolean
 	return ok and result == true
 end
 
+--- What this DataModel can bridge to, by asking rather than assuming.
+local function connectionTargets()
+	local targets = { edit = false, test = false, known = false }
+
+	pcall(function()
+		local service = game:GetService("PluginConnectionService")
+		targets.edit = service:CanHaveConnectionType(Enum.PluginConnectionTargetType.Edit)
+		targets.test = service:CanHaveConnectionType(Enum.PluginConnectionTargetType.Test)
+		targets.known = true
+	end)
+
+	return targets
+end
+
 local function studioLocale(): string?
 	local ok, locale = pcall(function()
 		return StudioService.StudioLocaleId
@@ -48,8 +62,16 @@ return function(context)
 					serialization = has("SerializationService", "SerializeInstancesAsync"),
 					deserialization = has("SerializationService", "DeserializeInstancesAsync"),
 					scriptEditor = has("ScriptEditorService", "UpdateSourceAsync"),
-					pluginConnection = has("PluginConnectionService", "Connect"),
+					capture = has("CaptureService", "CaptureScreenshot"),
+					-- Probed by the method that exists. An earlier version looked
+					-- for `Connect`, which does not, and reported the playtest
+					-- bridge as unavailable when it was fine — a made-up name
+					-- turning into a false blocker.
+					pluginConnection = has("PluginConnectionService", "CanHaveConnectionType"),
 				},
+				-- Which way this DataModel may bridge. From edit mode, Test is
+				-- the direction a playtest agent needs.
+				connections = connectionTargets(),
 				ops = context.listOps(),
 			}
 		end,
