@@ -12,6 +12,7 @@ import path from "node:path";
 import { registry } from "./commands.js";
 import { help, dim, green, cyan, red } from "./format.js";
 import { diagnose, formatReport } from "./doctor.js";
+import { explainUnreachable } from "./reach.js";
 import { renderAgentsMd, mergeInto, groupNames } from "./agents.js";
 import { runTest, formatVerdict, TestFailure } from "./playtest.js";
 import { UsageError } from "./args.js";
@@ -84,8 +85,12 @@ export async function local(name, { flags, positionals = [], port, daemon, Fatal
     }
 
     case "status": {
-      const response = await fetch(`http://127.0.0.1:${port}/health`).catch(() => null);
-      if (!response) throw new Fatal(EXIT.daemonDown, `no daemon on port ${port}. Is the app running?`);
+      let response;
+      try {
+        response = await fetch(`http://127.0.0.1:${port}/health`);
+      } catch (cause) {
+        throw new Fatal(EXIT.daemonDown, explainUnreachable(cause, port));
+      }
 
       const health = await response.json();
       const plugins = health.plugins.map((p) => `  ${p.placeName ?? "unnamed"} ${dim(`(${p.placeId})`)}`);

@@ -14,6 +14,7 @@ import { fileURLToPath } from "node:url";
 import { discover, bindArgs, run as runCommand } from "../daemon/commands.js";
 import { runTest, formatVerdict, TestFailure } from "./playtest.js";
 import { local } from "./local.js";
+import { explainUnreachable } from "./reach.js";
 import { waitForContext } from "./playtest.js";
 
 const APP_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -44,10 +45,11 @@ async function daemon(port, route, body) {
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
     });
-  } catch {
-    // A refused connection is the single most common failure, and "fetch
-    // failed" tells the user nothing about what to do next.
-    throw new Fatal(EXIT.daemonDown, `no MuslimSync daemon on port ${port}. Is the app running?`);
+  } catch (cause) {
+    // A refused connection is the most common failure but not the only one, and
+    // reporting them all as "is the app running?" sends people restarting an
+    // app that was never down.
+    throw new Fatal(EXIT.daemonDown, explainUnreachable(cause, port));
   }
 
   const payload = await response.json().catch(() => ({}));

@@ -60,7 +60,7 @@ Branch on these rather than parsing prose.
 | 2 | bad usage | fix the command; \`msync help <cmd>\` |
 | 3 | no plugin connected | ask the user to open a place in Studio |
 | 4 | the plugin refused | read the message; it names the cause |
-| 5 | no daemon | ask the user to start the MuslimSync app |
+| 5 | cannot reach the daemon | read the message — "is the app running?" and "a sandbox is blocking loopback" are different failures |
 | 6 | a test failed | the place is wrong, not the tool |
 | 7 | the setup is broken | run \`msync doctor\`; it says what to fix |
 

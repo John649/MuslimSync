@@ -13,6 +13,7 @@ import { homedir } from "node:os";
 import path from "node:path";
 
 import { vendoredArgon } from "../daemon/argon.js";
+import { explainUnreachable } from "./reach.js";
 import { discover } from "../daemon/commands.js";
 
 const PROTOCOL = 1;
@@ -23,14 +24,21 @@ const warn = (name, detail, fix) => ({ level: "warn", name, detail, fix });
 const fail = (name, detail, fix) => ({ level: "fail", name, detail, fix });
 
 async function checkDaemon(port) {
-  const response = await fetch(`http://127.0.0.1:${port}/health`, {
-    signal: AbortSignal.timeout(2000),
-  }).catch(() => null);
+  let response;
 
-  if (!response) {
+  try {
+    response = await fetch(`http://127.0.0.1:${port}/health`, { signal: AbortSignal.timeout(2000) });
+  } catch (cause) {
+    const blocked = ["EPERM", "EACCES"].includes(cause?.cause?.code);
+
     return {
       health: null,
-      result: fail("daemon", `nothing listening on ${port}`, "start the MuslimSync app, or `npm start`"),
+      result: fail(
+        "daemon",
+        explainUnreachable(cause, port),
+        // A blocked connection is not fixed by starting anything.
+        blocked ? "allow loopback in the sandbox, or run from an unsandboxed shell" : "start the MuslimSync app, or `npm start`",
+      ),
     };
   }
 
