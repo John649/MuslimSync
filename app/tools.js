@@ -4,10 +4,11 @@
 // cannot drift from the command line, or grow a second set of behaviours that
 // have to be kept in step by hand.
 
-import { ipcMain } from "electron";
+import { clipboard, ipcMain } from "electron";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
+import { authoringBrief } from "../cli/scaffold.js";
 import { discover, bindArgs, run as runCommand } from "../daemon/commands.js";
 import { encodePng, alphaBounds, cropRgba } from "../daemon/png.js";
 import { decodeValue } from "../cli/playtest.js";
@@ -85,6 +86,13 @@ export function registerTools({ daemon, artifacts, appRoot, directory, record })
       })),
       problems,
     };
+  });
+
+  ipcMain.handle("commands:brief", () => authoringBrief());
+
+  ipcMain.handle("commands:copyBrief", () => {
+    clipboard.writeText(authoringBrief());
+    return true;
   });
 
   ipcMain.handle("commands:run", async (_event, name, args) => {

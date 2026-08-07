@@ -26,7 +26,7 @@ export function searchRoots({ project, appRoot } = {}) {
 
 export class CommandError extends Error {}
 
-const NAME = /^[a-z][a-z0-9-]{0,39}$/;
+export const NAME = /^[a-z][a-z0-9-]{0,39}$/;
 
 /**
  * Validates one command.json.

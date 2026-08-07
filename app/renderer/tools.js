@@ -79,6 +79,36 @@ function renderCommands({ commands }) {
 
 api.commands.list().then(renderCommands);
 
+// The authoring brief: a self-contained page an AI assistant can act on. The
+// main process owns the text and the clipboard; this side only shows and asks.
+const brief = {
+  copy: document.getElementById("brief-copy"),
+  show: document.getElementById("brief-show"),
+  text: document.getElementById("brief-text"),
+};
+
+brief.copy.addEventListener("click", async () => {
+  const before = brief.copy.textContent;
+
+  try {
+    await api.commands.copyBrief();
+    brief.copy.textContent = "Copied ✓";
+  } catch {
+    brief.copy.textContent = "failed";
+  }
+
+  setTimeout(() => {
+    brief.copy.textContent = before;
+  }, 1500);
+});
+
+brief.show.addEventListener("click", async () => {
+  if (!brief.text.textContent) brief.text.textContent = await api.commands.brief();
+
+  const hidden = brief.text.classList.toggle("is-hidden");
+  brief.show.textContent = hidden ? "Show it" : "Hide it";
+});
+
 // -------------------------------------------------------------- capture
 
 const shot = {

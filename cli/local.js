@@ -27,6 +27,36 @@ export async function local(name, { flags, positionals = [], port, daemon, Fatal
     case "commands":
       return { json: registry() };
 
+    case "new-command": {
+      const { scaffold } = await import("./scaffold.js");
+
+      const name = positionals[0];
+      if (!name) throw new UsageError("new-command needs a name, e.g. msync new-command anchor-lights");
+
+      const made = scaffold({
+        name,
+        kind: typeof flags.kind === "string" ? flags.kind : undefined,
+        scope: flags.global ? "global" : "project",
+      });
+
+      const [manifest, handler] = made.files;
+
+      return {
+        json: made,
+        text: [
+          `${green("created")} ${made.folder}`,
+          `  ${cyan(manifest.padEnd(14))}${dim("name, args, examples")}`,
+          `  ${cyan(handler.padEnd(14))}${dim(`the handler — ${made.runs}`)}`,
+          "",
+          `It is already live — discovery reads the folder on every run:`,
+          `  msync ${name}`,
+          made.scope === "global"
+            ? dim("Available from every project (~/.muslimsync/commands).")
+            : dim("Available in this project only; --global would install it for all."),
+        ].join("\n"),
+      };
+    }
+
     case "agents": {
       // Narrowed to what a project actually does: a place that never captures
       // anything should not spend context explaining capture.

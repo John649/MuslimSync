@@ -97,7 +97,7 @@ Not spelled out here. `msync help <group>` lists any of these in full.
 | --- | --- |
 | Capture | `photo`, `authorize` |
 | Playtest | `playtest`, `playing`, `stop`, `run`, `test` |
-| Info | `capabilities`, `status`, `projects`, `commands`, `doctor`, `help`, `agents` |
+| Info | `capabilities`, `status`, `projects`, `commands`, `doctor`, `help`, `new-command`, `agents` |
 | Deen | `verse` |
 
 ## Conventions worth knowing
@@ -136,8 +136,10 @@ Branch on these rather than parsing prose.
 
 A folder with a `command.json` and one of `run.js`, `run.luau`, or
 `workflow.json` becomes a CLI verb, an app button, and a registry entry at
-once. Put it in `<project>/.muslimsync/commands/` to scope it to one project.
-See `commands/` for one of each kind.
+once. `msync new-command <name>` scaffolds a working one into this project's
+`.muslimsync/commands/` (or `~/.muslimsync/commands/` with `--global`, for
+every project); `--kind` picks `luau`, `node`, or `workflow`. See
+`commands/` for one of each kind.
 
 ## Taking something from another game
 

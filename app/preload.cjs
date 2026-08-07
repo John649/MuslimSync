@@ -39,6 +39,8 @@ contextBridge.exposeInMainWorld("muslimsync", {
   commands: {
     list: () => ipcRenderer.invoke("commands:list"),
     run: (name, args) => ipcRenderer.invoke("commands:run", name, args),
+    brief: () => ipcRenderer.invoke("commands:brief"),
+    copyBrief: () => ipcRenderer.invoke("commands:copyBrief"),
   },
   capture: {
     take: (options) => ipcRenderer.invoke("capture:take", options),

@@ -72,8 +72,10 @@ Branch on these rather than parsing prose.
 
 A folder with a \`command.json\` and one of \`run.js\`, \`run.luau\`, or
 \`workflow.json\` becomes a CLI verb, an app button, and a registry entry at
-once. Put it in \`<project>/.muslimsync/commands/\` to scope it to one project.
-See \`commands/\` for one of each kind.
+once. \`msync new-command <name>\` scaffolds a working one into this project's
+\`.muslimsync/commands/\` (or \`~/.muslimsync/commands/\` with \`--global\`, for
+every project); \`--kind\` picks \`luau\`, \`node\`, or \`workflow\`. See
+\`commands/\` for one of each kind.
 `;
 
 const TRANSFER = `## Taking something from another game

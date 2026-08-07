@@ -19,10 +19,25 @@ import { existsSync, mkdirSync, rmSync, statSync } from "node:fs";
 import { connect } from "node:net";
 import path from "node:path";
 
-/** Where the socket lives. Beside the settings, which is already ours. */
+/**
+ * Where the socket lives.
+ *
+ * A named pipe on Windows, a file beside the settings everywhere else. Node
+ * serves and dials both through the same API, so only the name differs — but
+ * the name has to differ: Windows AF_UNIX support is partial and pipes are what
+ * actually works there.
+ *
+ * The pipe name is fixed rather than derived from `directory`, because the
+ * pipe namespace is machine-global and has no directories in it.
+ */
 export function socketPath(directory) {
+  if (process.platform === "win32") return "\\\\.\\pipe\\muslimsync-daemon";
+
   return path.join(directory, "daemon.sock");
 }
+
+/** True when this path is a Windows named pipe rather than a real file. */
+const isPipe = (file) => file.startsWith("\\\\.\\pipe\\");
 
 /**
  * Removes a socket file left behind by a process that is gone.
@@ -31,6 +46,10 @@ export function socketPath(directory) {
  * safe because we check first that nothing is actually listening on it.
  */
 export async function clearStaleSocket(file) {
+  // A named pipe is not a filesystem entry: it disappears with the process that
+  // made it, so there is never a stale one to clear.
+  if (isPipe(file)) return true;
+
   if (!existsSync(file)) return true;
 
   const listening = await new Promise((resolve) => {
@@ -57,7 +76,7 @@ export async function clearStaleSocket(file) {
  */
 export async function listenOnSocket(file, handler, { onUpgrade } = {}) {
   try {
-    mkdirSync(path.dirname(file), { recursive: true });
+    if (!isPipe(file)) mkdirSync(path.dirname(file), { recursive: true });
 
     if (!(await clearStaleSocket(file))) {
       // Something is already serving here. That is another daemon, and taking
@@ -84,8 +103,16 @@ export async function listenOnSocket(file, handler, { onUpgrade } = {}) {
   }
 }
 
-/** True when something is listening on the socket right now. */
+/**
+ * True when something is listening right now.
+ *
+ * A named pipe cannot be stat'd, so on Windows this reports "worth trying" and
+ * the connection attempt is what actually settles it — the caller falls back to
+ * TCP on failure either way.
+ */
 export function socketIsLive(file) {
+  if (isPipe(file)) return true;
+
   try {
     return existsSync(file) && statSync(file).isSocket();
   } catch {

@@ -197,9 +197,23 @@
               </span>
               <h1 class="hero-title">No custom commands</h1>
               <p class="hero-body">
-                A command is a folder with a <code>command.json</code> and a handler. Registering one
-                gives you the CLI command, a button here, and an agent registry entry at once.
+                A command is a folder with a <code>command.json</code> and a handler. Dropping one
+                in gives you the CLI command, a button here, and an agent registry entry at once.
+                <code>msync new-command &lt;name&gt;</code> scaffolds a working one.
               </p>
+            </div>
+
+            <div class="tool">
+              <div class="tool-row">
+                <button class="button is-primary" type="button" id="brief-copy">Copy the brief for your AI</button>
+                <button class="button" type="button" id="brief-show">Show it</button>
+              </div>
+              <p class="tool-note">
+                Everything an AI assistant needs to write a command for you — the folder format,
+                the rules the loader enforces, and a working example of each handler kind. Paste
+                it into any chat and describe the command you want.
+              </p>
+              <pre class="output is-hidden" id="brief-text"></pre>
             </div>
           </section>
 

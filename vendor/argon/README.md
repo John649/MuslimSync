@@ -14,9 +14,24 @@ Only the platform you run on needs to be present. `darwin-arm64` is committed.
 
 ## Adding another platform
 
-Drop the matching release binary at the path above and `chmod +x` it on
-POSIX. `scripts/build-plugin.mjs` and the project-serving daemon both resolve it
+Drop the matching binary at the path above and `chmod +x` it on POSIX.
+`scripts/build-plugin.mjs` and the project-serving daemon both resolve it
 through `daemon/argon.js`, so nothing else needs changing.
+
+**It must be built from the fork.** A stock upstream argon release will not have
+the auth token, `/setConfig` or `/claimPlace`, and the failures are confusing
+rather than obvious — the plugin connects and then behaves as if the place were
+unclaimed. Do not download an official release and drop it in.
+
+From a checkout of the fork:
+
+    cargo build --release --target x86_64-pc-windows-msvc
+
+On Windows that is all it takes. Cross-compiling from macOS does not work out of
+the box — `ring` needs a C compiler targeting MSVC, and the Windows SDK headers
+are not there. `cargo-xwin` handles it if you want to cross-compile, at the cost
+of downloading Microsoft SDK components; building on a Windows machine or in CI
+avoids that entirely.
 
 ## Version
 

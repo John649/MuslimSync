@@ -227,6 +227,20 @@ export const COMMANDS = {
     examples: ["msync doctor"],
   },
   help: { local: "help", group: "Info", summary: "Show this help" },
+  "new-command": {
+    local: "new-command",
+    group: "Info",
+    summary: "Scaffold a custom command, ready to run before it is edited",
+    positional: { required: ["name"] },
+    flags: {
+      kind: "luau (default, runs in Studio), node (runs on this machine), or workflow (declarative steps)",
+      global: "put it in ~/.muslimsync/commands for every project, instead of this one's .muslimsync/commands",
+    },
+    examples: [
+      "msync new-command anchor-lights",
+      "msync new-command sweep-shots --kind node --global",
+    ],
+  },
   agents: {
     local: "agents",
     group: "Info",

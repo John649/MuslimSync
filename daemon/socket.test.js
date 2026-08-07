@@ -117,3 +117,32 @@ test("no socket path configured is not an error", async () => {
     await daemon.stop();
   }
 });
+
+// ------------------------------------------------------- windows pipes
+
+test("Windows gets a named pipe, not a file in the settings folder", (t) => {
+  // AF_UNIX support on Windows is partial; pipes are what actually works, and
+  // Node serves and dials both through the same API.
+  const real = process.platform;
+
+  try {
+    Object.defineProperty(process, "platform", { value: "win32", configurable: true });
+    assert.equal(socketPath("C:\\Users\\x\\.muslimsync"), "\\\\.\\pipe\\muslimsync-daemon");
+  } finally {
+    Object.defineProperty(process, "platform", { value: real, configurable: true });
+  }
+});
+
+test("a named pipe is never treated as a stale file to delete", async (t) => {
+  // The pipe namespace is not the filesystem: a pipe vanishes with its process,
+  // so there is nothing to clean up and nothing to unlink.
+  const real = process.platform;
+
+  try {
+    Object.defineProperty(process, "platform", { value: "win32", configurable: true });
+    assert.equal(await clearStaleSocket("\\\\.\\pipe\\muslimsync-daemon"), true);
+    assert.equal(socketIsLive("\\\\.\\pipe\\muslimsync-daemon"), true);
+  } finally {
+    Object.defineProperty(process, "platform", { value: real, configurable: true });
+  }
+});

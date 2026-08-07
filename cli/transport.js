@@ -25,13 +25,7 @@ export function defaultSocket() {
  * Returns { status, body } with the body as a Buffer, because the artifact
  * routes are MsgPack and the rest are JSON.
  */
-export function send({ port, route, method = "GET", body = null, headers = {}, socket = defaultSocket() }) {
-  const overSocket = socketIsLive(socket);
-
-  const options = overSocket
-    ? { socketPath: socket, path: route, method, headers }
-    : { host: "127.0.0.1", port, path: route, method, headers };
-
+function once(options, body, label) {
   return new Promise((resolve, reject) => {
     const req = httpRequest(options, (response) => {
       const chunks = [];
@@ -40,13 +34,28 @@ export function send({ port, route, method = "GET", body = null, headers = {}, s
     });
 
     req.on("error", (error) => {
-      // Name the transport that failed. "ECONNREFUSED" against a socket path
-      // and against a port mean different things to whoever has to fix it.
-      error.transport = overSocket ? `unix:${socket}` : `127.0.0.1:${port}`;
+      // Name the transport that failed. ECONNREFUSED against a socket path and
+      // against a port mean different things to whoever has to fix it.
+      error.transport = label;
       reject(error);
     });
 
     if (body) req.write(body);
     req.end();
   });
+}
+
+export async function send({ port, route, method = "GET", body = null, headers = {}, socket = defaultSocket() }) {
+  if (socketIsLive(socket)) {
+    try {
+      return await once({ socketPath: socket, path: route, method, headers }, body, `unix:${socket}`);
+    } catch {
+      // Falling through rather than failing. On Windows the socket is a named
+      // pipe, which cannot be stat'd, so `socketIsLive` can only say "worth
+      // trying" — the connection attempt is what settles it. A daemon serving
+      // TCP and no socket must still be reachable.
+    }
+  }
+
+  return once({ host: "127.0.0.1", port, path: route, method, headers }, body, `127.0.0.1:${port}`);
 }

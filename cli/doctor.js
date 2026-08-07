@@ -56,13 +56,22 @@ async function checkDaemon(port) {
   return { health, result: ok("daemon", `answering over ${via}`) };
 }
 
-/** Whether Roblox Studio is running at all. Unknown on platforms without pgrep. */
+/** Whether Roblox Studio is running at all. Null when we cannot tell. */
 function studioIsRunning() {
+  const [command, args] =
+    process.platform === "win32"
+      ? ["tasklist", ["/FI", "IMAGENAME eq RobloxStudioBeta.exe", "/NH"]]
+      : ["pgrep", ["-x", "RobloxStudio"]];
+
   try {
-    execFileSync("pgrep", ["-x", "RobloxStudio"], { stdio: "ignore" });
-    return true;
+    const output = execFileSync(command, args, { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+
+    // tasklist exits 0 either way and says so in the text; pgrep exits 1 when
+    // nothing matched, which lands in the catch.
+    return process.platform === "win32" ? /RobloxStudio/i.test(output) : true;
   } catch (error) {
-    // pgrep exits 1 when nothing matched, and ENOENT when it does not exist.
+    // ENOENT means the tool itself is missing, which is not an answer about
+    // Studio — better to say "unknown" than to claim it is not running.
     return error.code === "ENOENT" ? null : false;
   }
 }

@@ -223,9 +223,13 @@ cannot reach a socket file.
 
 ## Known limits
 
-- **macOS arm64 only.** That is the only Argon binary vendored in `vendor/argon`,
-  and the Windows path has never been run. Nothing is known to be wrong with it;
-  it is untested, which is a different thing.
+- **Windows needs its argon binary built.** The JavaScript and Luau are
+  platform-clean — the control socket becomes a named pipe, the Studio check
+  uses `tasklist`, paths are already case-folded — but `vendor/argon` only ships
+  `darwin-arm64`, and the binary has to come from the fork rather than an
+  upstream release (see [vendor/argon/README.md](vendor/argon/README.md)).
+  Nothing else is known to be missing, and none of it has been run on Windows,
+  which is a different claim from working.
 - Studio does not hot-reload a local plugin. After `build:plugin --install`,
   restart Studio for the new build to load.
 - **A universe's name is not readable from Studio.** Not on the DataModel, not
