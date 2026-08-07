@@ -1,0 +1,9 @@
+{
+  "name": "camera-marker",
+  "description": "Drop a marker Part at the current camera position",
+  "category": "Custom",
+  "args": {
+    "name": { "type": "string", "default": "CameraMarker", "help": "name for the marker" }
+  },
+  "examples": ["msync camera-marker", "msync camera-marker --name Spot"]
+}

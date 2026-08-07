@@ -212,3 +212,130 @@ test("a luau command runs through the eval op with its args in scope", async () 
   assert.match(sent.payload.source, /"who":"world"/);
   assert.match(sent.payload.source, /return args\.who/);
 });
+
+// ------------------------------------------------------------- workflows
+
+import { runWorkflow } from "./commands.js";
+
+/** Records every op a workflow issues, and replies from a table. */
+function workflowCtx(replies = {}) {
+  const calls = [];
+  return {
+    calls,
+    ctx: {
+      op: async (op, args) => {
+        calls.push({ op, args });
+        return typeof replies[op] === "function" ? replies[op](args) : (replies[op] ?? { ok: true });
+      },
+    },
+  };
+}
+
+test("runs steps in order", async () => {
+  const { ctx, calls } = workflowCtx();
+  await runWorkflow({ steps: [{ op: "ls" }, { op: "tree" }] }, { ctx });
+
+  assert.deepEqual(calls.map((c) => c.op), ["ls", "tree"]);
+});
+
+test("a later step can reference an earlier result, keeping its type", async () => {
+  // The whole point: a Vector3 must arrive as an object, not stringified into
+  // the next call.
+  const { ctx, calls } = workflowCtx({
+    get: { properties: { Size: { __type: "Vector3", x: 1, y: 2, z: 3 } } },
+  });
+
+  await runWorkflow(
+    {
+      steps: [
+        { id: "src", op: "get", args: { path: "Workspace/A" } },
+        { op: "set", args: { path: "Workspace/B", prop: "Size", value: "$src.value.properties.Size" } },
+      ],
+    },
+    { ctx },
+  );
+
+  assert.deepEqual(calls[1].args.value, { __type: "Vector3", x: 1, y: 2, z: 3 });
+});
+
+test("$$ escapes a literal dollar", async () => {
+  const { ctx, calls } = workflowCtx();
+  await runWorkflow({ steps: [{ op: "set", args: { value: "$$notaref" } }] }, { ctx });
+
+  assert.equal(calls[0].args.value, "$notaref");
+});
+
+test("references resolve inside nested args", async () => {
+  const { ctx, calls } = workflowCtx({ get: { name: "Boss" } });
+
+  await runWorkflow(
+    {
+      steps: [
+        { id: "a", op: "get" },
+        { op: "new", args: { properties: { Name: "$a.value.name" }, list: ["$a.value.name"] } },
+      ],
+    },
+    { ctx },
+  );
+
+  assert.equal(calls[1].args.properties.Name, "Boss");
+  assert.deepEqual(calls[1].args.list, ["Boss"]);
+});
+
+test("an unknown reference names the ids that do exist", async () => {
+  // A typo should be a one-look fix, not a hunt.
+  const { ctx } = workflowCtx();
+
+  await assert.rejects(
+    runWorkflow({ steps: [{ id: "a", op: "ls" }, { op: "get", args: { path: "$typo.value" } }] }, { ctx }),
+    /"\$typo" is not a known step \(have: args, a\)/,
+  );
+});
+
+test("duplicate step ids are refused", async () => {
+  const { ctx } = workflowCtx();
+  await assert.rejects(
+    runWorkflow({ steps: [{ id: "a", op: "ls" }, { id: "a", op: "ls" }] }, { ctx }),
+    /duplicate step id/,
+  );
+});
+
+test("a step with no op is refused before anything runs", async () => {
+  const { ctx, calls } = workflowCtx();
+  await assert.rejects(runWorkflow({ steps: [{ args: {} }] }, { ctx }), /op is required/);
+  assert.equal(calls.length, 0);
+});
+
+test("an empty workflow is refused", async () => {
+  const { ctx } = workflowCtx();
+  await assert.rejects(runWorkflow({ steps: [] }, { ctx }), /needs a steps array/);
+  await assert.rejects(runWorkflow({}, { ctx }), /needs a steps array/);
+});
+
+test("a failed assertion stops the workflow", async () => {
+  // Continuing past a failed expectation would report success for a run that
+  // did the wrong thing.
+  const { ctx, calls } = workflowCtx({ get: { class: "Part" } });
+
+  await assert.rejects(
+    runWorkflow(
+      { steps: [{ id: "a", op: "get", assert: { class: "Model" } }, { op: "rm" }] },
+      { ctx },
+    ),
+    /expected class to be "Model", got "Part"/,
+  );
+
+  assert.equal(calls.length, 1, "the step after a failed assertion must not run");
+});
+
+test("a passing assertion lets the workflow continue", async () => {
+  const { ctx, calls } = workflowCtx({ get: { class: "Model" } });
+  await runWorkflow({ steps: [{ id: "a", op: "get", assert: { class: "Model" } }, { op: "rm" }] }, { ctx });
+  assert.equal(calls.length, 2);
+});
+
+test("workflow args are addressable as $args", async () => {
+  const { ctx, calls } = workflowCtx();
+  await runWorkflow({ steps: [{ op: "get", args: { path: "$args.target" } }] }, { ctx, args: { target: "Workspace/X" } });
+  assert.equal(calls[0].args.path, "Workspace/X");
+});

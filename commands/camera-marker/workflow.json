@@ -1,0 +1,25 @@
+{
+  "description": "Reads the camera's CFrame and builds a Part there.",
+  "steps": [
+    {
+      "id": "camera",
+      "op": "get",
+      "args": { "path": "Workspace/Camera", "prop": "CFrame" },
+      "assert": { "prop": "CFrame" }
+    },
+    {
+      "id": "marker",
+      "op": "new",
+      "args": {
+        "class": "Part",
+        "parent": "Workspace",
+        "name": "$args.name",
+        "properties": {
+          "CFrame": "$camera.value.value",
+          "Anchored": true,
+          "Size": { "__type": "Vector3", "x": 2, "y": 2, "z": 2 }
+        }
+      }
+    }
+  ]
+}

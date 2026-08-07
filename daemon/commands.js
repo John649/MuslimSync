@@ -195,7 +195,12 @@ export async function run(command, { args, ctx, log = () => {} }) {
     return ctx.op("eval", { source: withArgs(source, args) });
   }
 
-  throw new CommandError(`${command.name}: ${command.kind} commands are not supported yet`);
+  if (command.kind === "workflow") {
+    const definition = JSON.parse(readFileSync(command.handler, "utf8"));
+    return runWorkflow(definition, { ctx, args, log });
+  }
+
+  throw new CommandError(`${command.name}: unknown handler kind ${command.kind}`);
 }
 
 /** Prepends the command's args as a Luau table, so a script can read them. */
@@ -208,5 +213,98 @@ export function isDirectory(candidate) {
     return statSync(candidate).isDirectory();
   } catch {
     return false;
+  }
+}
+
+// ------------------------------------------------------------- workflows
+
+/**
+ * Runs a declarative workflow: a list of steps, each an op, with later steps
+ * able to reference earlier results.
+ *
+ * References look like `$stepId.value.properties.Name` and preserve the JSON
+ * type they point at, so a Vector3 stays an object rather than being stringified
+ * into the next call. A leading `$$` escapes a literal dollar.
+ *
+ * Deliberately not a language: no loops, no conditionals, no expressions. A
+ * workflow that needs those should be a run.js, where the reader gets a real
+ * one instead of a half-invented one.
+ */
+export async function runWorkflow(definition, { ctx, args = {}, log = () => {} }) {
+  if (!Array.isArray(definition.steps) || definition.steps.length === 0) {
+    throw new CommandError("a workflow needs a steps array");
+  }
+
+  const results = { args };
+
+  for (const [index, step] of definition.steps.entries()) {
+    const where = step.id ?? `step ${index + 1}`;
+
+    if (typeof step.op !== "string" || !step.op) {
+      throw new CommandError(`${where}: op is required`);
+    }
+
+    const resolved = resolveRefs(step.args ?? {}, results, where);
+
+    log(`${where}: ${step.op}`);
+
+    const value = await ctx.op(step.op, resolved);
+
+    if (step.id) {
+      if (results[step.id]) throw new CommandError(`${where}: duplicate step id "${step.id}"`);
+      results[step.id] = { value };
+    }
+
+    if (step.assert) assertStep(step.assert, value, where);
+  }
+
+  return results;
+}
+
+/** Replaces $ref strings anywhere in an args tree. */
+function resolveRefs(node, results, where) {
+  if (typeof node === "string") return resolveRef(node, results, where);
+  if (Array.isArray(node)) return node.map((item) => resolveRefs(item, results, where));
+
+  if (node && typeof node === "object") {
+    return Object.fromEntries(Object.entries(node).map(([key, value]) => [key, resolveRefs(value, results, where)]));
+  }
+
+  return node;
+}
+
+function resolveRef(text, results, where) {
+  if (text.startsWith("$$")) return text.slice(1);
+  if (!text.startsWith("$")) return text;
+
+  const [head, ...rest] = text.slice(1).split(".");
+
+  if (!(head in results)) {
+    // Naming the available ids turns a typo into a one-look fix.
+    throw new CommandError(`${where}: "$${head}" is not a known step (have: ${Object.keys(results).join(", ")})`);
+  }
+
+  let value = results[head];
+
+  for (const key of rest) {
+    if (value === null || value === undefined) {
+      throw new CommandError(`${where}: ${text} walked off the end at "${key}"`);
+    }
+    value = value[key];
+  }
+
+  return value;
+}
+
+function assertStep(expectation, value, where) {
+  for (const [path, expected] of Object.entries(expectation)) {
+    let actual = value;
+    for (const key of path.split(".")) actual = actual?.[key];
+
+    if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+      // A workflow that quietly continued past a failed expectation would
+      // report success for a run that did the wrong thing.
+      throw new CommandError(`${where}: expected ${path} to be ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
+    }
   }
 }
