@@ -160,16 +160,5 @@ return function(_context)
 		end,
 
 		--- Asks Studio to save. Returns as soon as the request is made.
-		save = function()
-			local ok, err = pcall(function()
-				(game :: any):Save()
-			end)
-
-			if not ok then
-				fail("PLUGIN_ERROR", `save failed: {tostring(err)}`)
-			end
-
-			return { saving = true }
-		end,
 	}
 end

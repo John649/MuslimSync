@@ -57,7 +57,11 @@ local function screenshot(): string
 
 	while content == nil do
 		if os.clock() > deadline then
-			fail("TIMEOUT", "the screenshot was never delivered — the permission prompt may be waiting")
+			fail(
+				"TIMEOUT",
+				"the screenshot was never delivered — a modal Studio dialog blocks the callback, "
+					.. "so check for a permission prompt or any other open dialog"
+			)
 		end
 		RunService.Heartbeat:Wait()
 	end

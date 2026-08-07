@@ -20,7 +20,8 @@
     "make:app": "node scripts/make-app.mjs",
     "start:dev": "electron .",
     "gen:agents": "node scripts/make-agents.mjs",
-    "set:icons": "node scripts/set-icons.mjs"
+    "set:icons": "node scripts/set-icons.mjs",
+    "smoke": "node scripts/smoke.mjs"
   },
   "devDependencies": {
     "electron": "^33.0.0"

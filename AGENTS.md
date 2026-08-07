@@ -11,6 +11,7 @@ are true; check it first if anything else fails.
 
 ```bash
 npm run check                     # tests, plugin lint, file-size gate, this file's drift gate
+npm run smoke                     # all 36 commands against a live Studio
 npm run build:plugin -- --install # build the plugin into Studio's plugins folder
 npm run gen:agents                # regenerate the tool section below
 ```
@@ -73,7 +74,6 @@ twice in this project's history, both times after the commit had already landed.
 | `logs` | Recent Studio output |
 | `undo` | Undo the last change |
 | `redo` | Redo the last undone change |
-| `save` | Ask Studio to save the place |
 | `ping` | Round-trip the plugin and report latency |
 ### Also available
 
@@ -100,6 +100,9 @@ Not spelled out here. `msync help <group>` lists any of these in full.
   checks that make it safe.
 - **Every write is one undo step.** A failed write is rolled back rather than
   half-applied.
+- **There is no save command.** Studio does not expose a save API to plugins —
+  `game.Save` is not indexable at all — so saving the place is the user
+  pressing Cmd-S. Ask them; do not claim to have saved.
 - **Reads are free and cheap.** Prefer `ls`/`tree`/`query` over `eval` for
   anything you could look up; `eval` runs arbitrary code in the user's open
   place.

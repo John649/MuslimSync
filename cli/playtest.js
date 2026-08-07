@@ -29,7 +29,7 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
  * the server, so starting one and immediately executing would fail on timing
  * alone rather than on anything the script did.
  */
-async function waitForContext(op, context, { timeoutMs = READY_TIMEOUT_MS, log } = {}) {
+export async function waitForContext(op, context, { timeoutMs = READY_TIMEOUT_MS, log } = {}) {
   timeoutMs = timeoutMs ?? READY_TIMEOUT_MS;
   const deadline = Date.now() + timeoutMs;
   let announced = false;

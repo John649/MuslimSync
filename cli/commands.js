@@ -130,7 +130,6 @@ export const COMMANDS = {
   },
   undo: { op: "undo", group: "Studio", summary: "Undo the last change" },
   redo: { op: "redo", group: "Studio", summary: "Redo the last undone change" },
-  save: { op: "save", group: "Studio", summary: "Ask Studio to save the place" },
   ping: { op: "ping", group: "Studio", summary: "Round-trip the plugin and report latency" },
 
   // -------------------------------------------------------------- capture

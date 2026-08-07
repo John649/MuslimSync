@@ -14,6 +14,7 @@ import { fileURLToPath } from "node:url";
 import { discover, bindArgs, run as runCommand } from "../daemon/commands.js";
 import { runTest, formatVerdict, TestFailure } from "./playtest.js";
 import { local } from "./local.js";
+import { waitForContext } from "./playtest.js";
 
 const APP_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -250,6 +251,19 @@ async function main(argv) {
   const startedAt = Date.now();
   const args = opArguments(command, spec, positionals, flags);
 
+  // A playtest takes a few seconds to boot and the client context arrives after
+  // the server, so `msync playtest && msync run ...` failed on timing alone.
+  // Waiting is what the caller meant by naming a context.
+  if (command === "run") {
+    await waitForContext(
+      (name, payload) => daemon(port, "/op", { op: name, args: payload, timeoutMs: 15000 }),
+      args.context ?? "server",
+      { log: (message) => process.stderr.write(`${dim(message)}\n`) },
+    ).catch((cause) => {
+      throw new Fatal(EXIT.notConnected, cause.message);
+    });
+  }
+
   // `--script` is sugar for pasting a file into the source argument, which is
   // what anyone doing this by hand ends up writing anyway.
   if (flags.script) {
@@ -269,6 +283,14 @@ async function main(argv) {
   });
 
   if (command === "ping") result.latencyMs = Date.now() - startedAt;
+
+  // Some ops answer successfully while reporting that the thing they ran
+  // failed — `eval` on a script that throws, `run` on a failing playtest
+  // expression. Exiting 0 there tells a script the code worked.
+  if (result?.ok === false) {
+    process.stdout.write(`${flags.raw ? JSON.stringify(result, null, 2) : render(command, result)}\n`);
+    throw new Fatal(EXIT.pluginError, String(result.error ?? "the plugin reported a failure"));
+  }
 
   // The plugin hands back raw RGBA in an artifact; turning it into a file is
   // this side's job, because that is where zlib lives.

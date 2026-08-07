@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { runTest, formatVerdict, TestFailure } from "./playtest.js";
+import { runTest, formatVerdict, TestFailure, waitForContext } from "./playtest.js";
 
 /**
  * A fake plugin.
@@ -145,4 +145,26 @@ test("a plain string result is left alone", async () => {
 test("a json flag that lies falls back to the raw string", async () => {
   const { op } = fakeOp({ exec: { ok: true, json: true, value: "not json" } });
   assert.equal((await runTest(op, { source: "x" })).value, "not json");
+});
+
+// ------------------------------------------------ ops that fail successfully
+
+test("an op that reports ok:false is a failure, whatever its exit status", async () => {
+  // `eval` on a script that throws answers the request successfully while
+  // saying the script failed. Reading only the transport meant exiting 0 and
+  // telling a caller the code ran.
+  const { op } = fakeOp({ exec: { ok: false, error: "Workspace.Probe:3: attempt to index nil" } });
+
+  await assert.rejects(runTest(op, { source: "x" }), /attempt to index nil/);
+});
+
+test("waitForContext is exported so `run` can use the same wait as `test`", async () => {
+  // `msync playtest && msync run ...` failed on timing alone before this: the
+  // contexts take seconds to check in, and two commands cannot share the poll
+  // unless it lives somewhere both can reach.
+  const { op, calls } = fakeOp({ readyAfter: 2 });
+
+  await waitForContext(op, "client", { timeoutMs: 5000 });
+
+  assert.equal(calls.filter((c) => c.op === "playtest_status").length, 3);
 });
