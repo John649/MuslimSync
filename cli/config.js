@@ -8,7 +8,7 @@
 // Looked up from the working directory upward, so it applies to whatever
 // project you are standing in without anything having to be passed.
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 const FILE = path.join(".muslimsync", "config.json");
@@ -90,4 +90,39 @@ export function whyDisabled(name, config) {
   return config.only
     ? `${name} is not in commands.only (${where})`
     : `${name} is disabled in ${where}`;
+}
+
+/**
+ * Writes a project's disable list.
+ *
+ * Only the commands key is touched: a project may keep other settings in here
+ * later, and a writer that rewrites the whole file would quietly drop them.
+ * An empty list removes the key rather than leaving `"disable": []` behind,
+ * because a config that says nothing should look like one.
+ */
+export function writeDisabled(projectPath, disable) {
+  const file = path.join(projectPath, FILE);
+  let config = {};
+
+  if (existsSync(file)) {
+    try {
+      config = JSON.parse(readFileSync(file, "utf8"));
+    } catch (cause) {
+      throw new ConfigError(`${file} is not valid JSON (${cause.message})`);
+    }
+  }
+
+  const commands = { ...(config.commands ?? {}) };
+  delete commands.only;
+
+  if (disable.length) commands.disable = [...disable].sort();
+  else delete commands.disable;
+
+  if (Object.keys(commands).length) config.commands = commands;
+  else delete config.commands;
+
+  mkdirSync(path.dirname(file), { recursive: true });
+  writeFileSync(file, `${JSON.stringify(config, null, 2)}\n`);
+
+  return { file, disable };
 }

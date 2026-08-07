@@ -94,3 +94,45 @@ test("the refusal names the file, so it can be edited", () => {
 
   assert.match(whyDisabled("eval", config), /config\.json/);
 });
+
+// ------------------------------------------------------------- writing
+
+import { writeDisabled } from "./config.js";
+import { readFileSync } from "node:fs";
+
+test("writing a disable list is read back by the reader", () => {
+  // The UI writes the same file the CLI reads; two formats would drift.
+  const { root } = project(null);
+  writeDisabled(root, ["eval", "source"]);
+
+  assert.equal(isEnabled("eval", readConfig(root)), false);
+  assert.equal(isEnabled("ls", readConfig(root)), true);
+});
+
+test("clearing the list leaves no empty key behind", () => {
+  // A config that says nothing should look like one.
+  const { root } = project('{"commands":{"disable":["eval"]}}');
+  writeDisabled(root, []);
+
+  const raw = JSON.parse(readFileSync(path.join(root, ".muslimsync", "config.json"), "utf8"));
+  assert.deepEqual(raw, {});
+});
+
+test("other settings in the file survive a write", () => {
+  // A project may keep more in here later, and a writer that rewrote the whole
+  // file would quietly drop it.
+  const { root } = project('{"projectName":"mine","commands":{"disable":["eval"]}}');
+  writeDisabled(root, ["photo"]);
+
+  const raw = JSON.parse(readFileSync(path.join(root, ".muslimsync", "config.json"), "utf8"));
+  assert.equal(raw.projectName, "mine");
+  assert.deepEqual(raw.commands.disable, ["photo"]);
+});
+
+test("the list is sorted, so the file does not churn in git", () => {
+  const { root } = project(null);
+  writeDisabled(root, ["source", "eval", "photo"]);
+
+  const raw = JSON.parse(readFileSync(path.join(root, ".muslimsync", "config.json"), "utf8"));
+  assert.deepEqual(raw.commands.disable, ["eval", "photo", "source"]);
+});

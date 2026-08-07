@@ -9,6 +9,8 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { authoringBrief } from "../cli/scaffold.js";
+import { COMMANDS } from "../cli/commands.js";
+import { readConfig, writeDisabled, isEnabled } from "../cli/config.js";
 import { discover, bindArgs, run as runCommand } from "../daemon/commands.js";
 import { encodePng, alphaBounds, cropRgba } from "../daemon/png.js";
 import { decodeValue } from "../cli/playtest.js";
@@ -89,6 +91,45 @@ export function registerTools({ daemon, artifacts, appRoot, directory, record })
   });
 
   ipcMain.handle("commands:brief", () => authoringBrief());
+
+  /**
+   * Every built-in command and whether this project allows it.
+   *
+   * Editing JSON by hand to turn a command off is a chore nobody will do
+   * twice, so the same file the CLI reads is what these toggles write.
+   */
+  ipcMain.handle("config:list", (_event, projectPath) => {
+    const config = projectPath ? readConfig(projectPath) : { file: null, disable: [], only: null };
+
+    return {
+      file: config.file,
+      // `only` is an allowlist someone wrote by hand; toggles cannot express it
+      // without silently rewriting their intent, so the UI says so instead.
+      allowlist: config.only,
+      commands: Object.entries(COMMANDS).map(([name, spec]) => ({
+        name,
+        group: spec.group,
+        summary: spec.summary,
+        enabled: isEnabled(name, config),
+        // Some commands are how you find out what went wrong; turning them off
+        // would leave a project nobody can debug.
+        locked: ["help", "doctor", "commands", "status"].includes(name),
+      })),
+    };
+  });
+
+  ipcMain.handle("config:set", (_event, projectPath, name, enabled) => {
+    const config = readConfig(projectPath);
+    const disable = new Set(config.disable);
+
+    if (enabled) disable.delete(name);
+    else disable.add(name);
+
+    const written = writeDisabled(projectPath, [...disable]);
+    record("op", `${name} ${enabled ? "enabled" : "disabled"} for ${path.basename(projectPath)}`);
+
+    return written;
+  });
 
   ipcMain.handle("commands:copyBrief", () => {
     clipboard.writeText(authoringBrief());

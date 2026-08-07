@@ -251,3 +251,111 @@ for (const channel of channels) {
     }
   });
 }
+
+// ------------------------------------------------- which commands a project has
+
+const cfg = {
+  project: document.getElementById("config-project"),
+  note: document.getElementById("config-note"),
+  list: document.getElementById("config-list"),
+};
+
+/** Fills the project picker. Disabled when there is nothing to configure. */
+async function loadConfigProjects() {
+  const { projects } = await api.projects.list();
+
+  cfg.project.replaceChildren();
+  cfg.project.disabled = projects.length === 0;
+
+  if (!projects.length) {
+    cfg.note.textContent = "No projects yet — commands are configured per project.";
+    cfg.list.replaceChildren();
+    return;
+  }
+
+  for (const project of projects) {
+    const option = document.createElement("option");
+    option.value = project.path;
+    option.textContent = project.name;
+    cfg.project.append(option);
+  }
+
+  await renderConfig();
+}
+
+// Built with DOM calls: a command's summary is ours, but the project path in
+// the note comes off disk and is not ours to treat as markup.
+async function renderConfig() {
+  const projectPath = cfg.project.value;
+  if (!projectPath) return;
+
+  const { commands, allowlist, file } = await api.config.list(projectPath);
+
+  cfg.list.replaceChildren();
+
+  if (allowlist) {
+    // Toggling would have to rewrite their allowlist as a blocklist, which
+    // changes what they wrote rather than what they meant.
+    cfg.note.textContent = `${file} uses commands.only — edit that file to change it.`;
+    return;
+  }
+
+  const off = commands.filter((command) => !command.enabled).length;
+  cfg.note.textContent = off ? `${off} turned off for this project` : "All commands available here";
+
+  for (const command of commands) {
+    const row = document.createElement("li");
+    row.className = "cmd";
+
+    const copy = document.createElement("span");
+    copy.className = "cmd-copy";
+
+    const name = document.createElement("span");
+    name.className = "cmd-name";
+    name.textContent = command.name;
+
+    const summary = document.createElement("span");
+    summary.className = "cmd-desc";
+    summary.textContent = command.summary;
+
+    const toggle = document.createElement("label");
+    toggle.className = "switch";
+
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.checked = command.enabled;
+    // Locked ones are how you find out what went wrong; a project that turned
+    // off help and doctor would be one nobody could debug.
+    input.disabled = command.locked;
+    toggle.title = command.locked ? "always available" : `${command.enabled ? "disable" : "enable"} ${command.name}`;
+
+    input.addEventListener("change", async () => {
+      input.disabled = true;
+
+      try {
+        await api.config.set(projectPath, command.name, input.checked);
+        await renderConfig();
+      } catch (error) {
+        cfg.note.textContent = error.message.replace(/^Error invoking remote method '[^']+': /, "");
+        input.checked = !input.checked;
+      } finally {
+        input.disabled = command.locked;
+      }
+    });
+
+    // The input is transparent; the track is the part you can see. Without it
+    // the row renders as a toggle-shaped hole.
+    const track = document.createElement("span");
+    track.className = "switch-track";
+    track.setAttribute("aria-hidden", "true");
+
+    toggle.append(input, track);
+    copy.append(name, summary);
+    row.append(copy, toggle);
+    cfg.list.append(row);
+  }
+}
+
+cfg.project.addEventListener("change", renderConfig);
+api.projects.onChange(loadConfigProjects);
+loadConfigProjects();
