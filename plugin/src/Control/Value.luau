@@ -31,9 +31,45 @@ end
 
 Value.pathOf = pathOf
 
+-- Deep enough for any result worth reading, shallow enough that a nested
+-- structure cannot be used to blow up a frame.
+local MAX_ENCODE_DEPTH = 8
+
 --- Encodes one Roblox value into a JSON-safe form.
-function Value.encode(value: any): any
+---
+--- `depth` and `seen` are how tables recurse; callers pass neither.
+function Value.encode(value: any, depth: number?, seen: { [any]: boolean }?): any
 	local kind = typeof(value)
+
+	if kind == "table" then
+		local level = (depth or 0) + 1
+		local visited = seen or {}
+
+		if level > MAX_ENCODE_DEPTH then
+			return { __type = "Unsupported", of = "table", text = `nested deeper than {MAX_ENCODE_DEPTH}` }
+		end
+
+		if visited[value] then
+			-- A table that contains itself would otherwise recurse until the
+			-- stack gave out, which reads as a hang rather than as a bad value.
+			return { __type = "Unsupported", of = "table", text = "cyclic" }
+		end
+
+		visited[value] = true
+
+		local encoded = {}
+		for key, item in value do
+			local keyKind = type(key)
+
+			if keyKind == "string" or keyKind == "number" then
+				encoded[key] = Value.encode(item, level, visited)
+			end
+		end
+
+		visited[value] = nil
+
+		return encoded
+	end
 
 	if kind == "nil" or kind == "boolean" or kind == "string" then
 		return value

@@ -1,0 +1,13 @@
+{
+  "name": "anchor-all",
+  "description": "Anchor every unanchored part under a path",
+  "category": "Build",
+  "args": {
+    "path": { "type": "string", "default": "Workspace" },
+    "dryRun": { "type": "boolean", "default": false }
+  },
+  "examples": [
+    "msync anchor-all",
+    "msync anchor-all --path Workspace/Level1 --dryRun true"
+  ]
+}
