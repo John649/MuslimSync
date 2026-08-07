@@ -8,6 +8,8 @@
 // launching real processes.
 
 import { spawn as nodeSpawn } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { createConnection } from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -68,6 +70,67 @@ export class ArgonProcesses {
     this.spawn = spawn;
     this.probe = probe;
     this.now = now;
+  }
+
+  /**
+   * Adopts serves that were already running before this process started.
+   *
+   * `running` is in memory, so an app restart forgets every serve while the
+   * argon processes themselves carry on — which showed every project as "idle"
+   * while sync was plainly working. Argon writes what it is serving to
+   * ~/.argon/sessions.toml, so that is what gets read.
+   *
+   * Each entry is checked twice before being believed: the pid has to exist and
+   * the port has to answer. A session file outlives a crash, and adopting a
+   * dead entry would put the lie back the other way round.
+   */
+  async adoptRunning() {
+    const file = path.join(homedir(), ".argon", "sessions.toml");
+
+    let text;
+    try {
+      text = readFileSync(file, "utf8");
+    } catch {
+      return [];
+    }
+
+    const adopted = [];
+
+    for (const block of text.split(/\[active_sessions\.[^\]]+\]/).slice(1)) {
+      const pid = Number(block.match(/pid\s*=\s*(\d+)/)?.[1]);
+      const port = Number(block.match(/port\s*=\s*(\d+)/)?.[1]);
+      const host = block.match(/host\s*=\s*"([^"]+)"/)?.[1] ?? this.host;
+      const project = block.match(/project\s*=\s*"([^"]+)"/)?.[1];
+
+      if (!pid || !port || !project) continue;
+
+      try {
+        // Signal 0 tests for existence without touching the process.
+        process.kill(pid, 0);
+      } catch {
+        continue;
+      }
+
+      if (!(await this.probe(port, host))) continue;
+
+      // The file names the project file; the map is keyed by its folder.
+      const projectPath = path.dirname(project);
+
+      if (this.#sessions.has(projectPath)) continue;
+
+      this.#sessions.set(projectPath, {
+        host,
+        port,
+        startedAt: this.now(),
+        child: null,
+        path: projectPath,
+        adopted: true,
+      });
+
+      adopted.push(projectPath);
+    }
+
+    return adopted;
   }
 
   /** Sessions keyed by canonical project path, for projects.list(). */

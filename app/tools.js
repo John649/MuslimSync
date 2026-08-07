@@ -4,7 +4,7 @@
 // cannot drift from the command line, or grow a second set of behaviours that
 // have to be kept in step by hand.
 
-import { clipboard, ipcMain } from "electron";
+import { clipboard, ipcMain, shell } from "electron";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
@@ -64,7 +64,7 @@ async function writeCapture(store, into, result, options) {
  * when the daemon restarts, and a captured reference would keep answering from
  * the dead one.
  */
-export function registerTools({ daemon, artifacts, appRoot, directory, record }) {
+export function registerTools({ daemon, artifacts, appRoot, directory, record, projects, argon, changed }) {
   const op = (name, args = {}, timeoutMs = 120000) => {
     const live = daemon();
     if (!live) throw new Error("the daemon is not running");
@@ -88,6 +88,32 @@ export function registerTools({ daemon, artifacts, appRoot, directory, record })
       })),
       problems,
     };
+  });
+
+  // ---------------------------------------------------------- one project
+
+  ipcMain.handle("project:rename", (_event, projectPath, name) => {
+    const result = projects.rename(projectPath, name);
+    changed();
+    return result;
+  });
+
+  ipcMain.handle("project:serve", async (_event, projectPath) => {
+    const session = await argon().start(projectPath);
+    changed();
+    return { host: session.host, port: session.port };
+  });
+
+  ipcMain.handle("project:stop", (_event, projectPath) => {
+    const stopped = argon().stop(projectPath);
+    changed();
+    return { stopped };
+  });
+
+  ipcMain.handle("project:reveal", (_event, projectPath) => {
+    // The folder is the project, and it is what someone wants to look at.
+    shell.openPath(projectPath);
+    return true;
   });
 
   ipcMain.handle("commands:brief", () => authoringBrief());

@@ -1025,3 +1025,28 @@ strong {
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
+
+/* --------------------------------------------------- one project's settings */
+
+.detail {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.button.is-back {
+  align-self: flex-start;
+  margin-bottom: 12px;
+  background: transparent;
+  border-color: transparent;
+  padding-left: 0;
+}
+
+.project {
+  /* The whole row opens the project, so it has to look like it does. */
+  cursor: pointer;
+}
+
+.project:hover {
+  background: var(--content-hover, #35373c);
+}

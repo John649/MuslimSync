@@ -140,6 +140,41 @@
         <main class="content">
           <section class="page" id="view-projects" data-note="Each served project runs its own Argon sync server">
             <ul class="projects is-hidden" id="project-list"></ul>
+
+            <div class="detail is-hidden" id="project-detail">
+              <button class="button is-back" type="button" id="detail-back">← All projects</button>
+
+              <div class="row">
+                <div class="row-copy">
+                  <span class="row-label">Name</span>
+                  <span class="row-help">What the project file calls it. The folder is left alone.</span>
+                </div>
+                <input class="field" type="text" id="detail-name" />
+              </div>
+
+              <div class="row">
+                <div class="row-copy">
+                  <span class="row-label">Folder</span>
+                  <span class="row-help" id="detail-path"></span>
+                </div>
+                <button class="button" type="button" id="detail-reveal">Reveal</button>
+              </div>
+
+              <div class="row">
+                <div class="row-copy">
+                  <span class="row-label">Sync</span>
+                  <span class="row-help" id="detail-sync"></span>
+                </div>
+                <button class="button" type="button" id="detail-serve"></button>
+              </div>
+
+              <div class="row">
+                <div class="row-copy">
+                  <span class="row-label">Identity</span>
+                  <span class="row-help" id="detail-identity"></span>
+                </div>
+              </div>
+            </div>
             <div class="hero" id="projects-empty">
               <span class="hero-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round">
@@ -361,5 +396,6 @@
 
     <script type="module" src="app.js"></script>
     <script type="module" src="tools.js"></script>
+    <script type="module" src="project.js"></script>
   </body>
 </html>

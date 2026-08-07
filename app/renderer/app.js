@@ -176,11 +176,32 @@ function renderProjects({ projects, root }) {
 
     copy.append(name, meta);
     row.append(dot, copy, state);
+
+    // The row is the way in: a list you can only look at is a list that makes
+    // you go somewhere else to change anything.
+    row.tabIndex = 0;
+
+    // Announced rather than called: the settings panel is its own module, and
+    // importing it back here would make the two files circular.
+    const open = () => document.dispatchEvent(new CustomEvent("project:open", { detail: project.path }));
+
+    row.addEventListener("click", open);
+    row.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        open();
+      }
+    });
+
     el.projectList.append(row);
   }
 }
 
-const loadProjects = () => api.projects.list().then(renderProjects);
+const loadProjects = () =>
+  api.projects.list()
+    .then(renderProjects)
+    // The panel re-reads after any change to the list, including its own.
+    .then(() => document.dispatchEvent(new Event("projects:rendered")));
 
 // A cancelled dialog leaves the view exactly as it was; only a real refusal
 // gets shown, and only until the next attempt so it cannot go stale.

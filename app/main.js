@@ -216,6 +216,14 @@ async function startDaemon() {
 
     await daemon.start();
     daemonError = null;
+
+    // Serves that outlived a previous run are still serving. Without this the
+    // list shows every project as idle while sync is plainly working.
+    const adopted = await argon.adoptRunning();
+    if (adopted.length) {
+      record("op", `adopted ${adopted.length} running serve(s)`);
+      publishStatus();
+    }
   } catch (error) {
     daemon = null;
     daemonError =
@@ -336,6 +344,9 @@ registerTools({
   appRoot: path.join(HERE, ".."),
   directory: () => settings.DIR,
   record,
+  projects,
+  argon: () => argon,
+  changed: publishStatus,
 });
 
 app.whenReady().then(async () => {

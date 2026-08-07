@@ -11,6 +11,35 @@ import { ArgonProcesses } from "./argon.js";
  * both to find a free port and to wait for one to open, so a fake that answers
  * true for every port makes allocation believe they are all taken.
  */
+/**
+ * Runs `body` with ~/.argon/sessions.toml set to `contents`.
+ *
+ * The real file belongs to the developer's own argon; it is put back exactly as
+ * it was, including not existing.
+ */
+async function withSessionsFile(contents, body) {
+  const { homedir } = await import("node:os");
+  const { existsSync, readFileSync, writeFileSync, rmSync, mkdirSync } = await import("node:fs");
+  const path = (await import("node:path")).default;
+
+  const file = path.join(homedir(), ".argon", "sessions.toml");
+  const had = existsSync(file);
+  const before = had ? readFileSync(file, "utf8") : null;
+
+  try {
+    if (contents === null) rmSync(file, { force: true });
+    else {
+      mkdirSync(path.dirname(file), { recursive: true });
+      writeFileSync(file, contents);
+    }
+
+    return await body();
+  } finally {
+    if (had) writeFileSync(file, before);
+    else rmSync(file, { force: true });
+  }
+}
+
 function harness({ readyAfter = 1, neverReady = false, exitAfter = null, busy = [], says = null } = {}) {
   const spawned = [];
   // port -> probes remaining before it answers. Absent means nothing listening.
@@ -270,4 +299,61 @@ test("argon's own words survive into the error", async () => {
   });
 
   await assert.rejects(processes.start("/tmp/project"), /expected value at line 3/);
+});
+
+// ------------------------------------------- serves that predate this process
+
+test("a serve running before we started is adopted, not reported as idle", async () => {
+  // `running` is in memory, so an app restart forgets every serve while the
+  // argon processes carry on — which showed every project as idle while sync
+  // was working.
+  const { processes } = harness({ busy: [8000] });
+
+  const sessions = `last_session = "0"
+
+[active_sessions.0]
+pid = ${process.pid}
+host = "localhost"
+port = 8000
+project = "/tmp/AGame/default.project.json"
+`;
+
+  const adopted = await withSessionsFile(sessions, () => processes.adoptRunning());
+
+  assert.deepEqual(adopted, ["/tmp/AGame"], "keyed by the folder, not the project file");
+  assert.equal(processes.session("/tmp/AGame").port, 8000);
+});
+
+test("an entry whose process is gone is not adopted", async () => {
+  // A session file outlives a crash, and believing it would put the lie back
+  // the other way round.
+  const { processes } = harness({ busy: [8000] });
+
+  const sessions = `[active_sessions.0]
+pid = 999999
+host = "localhost"
+port = 8000
+project = "/tmp/Dead/default.project.json"
+`;
+
+  assert.deepEqual(await withSessionsFile(sessions, () => processes.adoptRunning()), []);
+});
+
+test("an entry whose port does not answer is not adopted", async () => {
+  // The pid can be alive while the serve is not: same process, different job.
+  const { processes } = harness();
+
+  const sessions = `[active_sessions.0]
+pid = ${process.pid}
+host = "localhost"
+port = 8123
+project = "/tmp/Quiet/default.project.json"
+`;
+
+  assert.deepEqual(await withSessionsFile(sessions, () => processes.adoptRunning()), []);
+});
+
+test("no session file at all is not an error", async () => {
+  const { processes } = harness();
+  assert.deepEqual(await withSessionsFile(null, () => processes.adoptRunning()), []);
 });

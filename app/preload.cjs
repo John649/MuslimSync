@@ -25,6 +25,10 @@ contextBridge.exposeInMainWorld("muslimsync", {
   projects: {
     list: () => ipcRenderer.invoke("projects:list"),
     chooseRoot: () => ipcRenderer.invoke("projects:chooseRoot"),
+    rename: (path, name) => ipcRenderer.invoke("project:rename", path, name),
+    serve: (path) => ipcRenderer.invoke("project:serve", path),
+    stop: (path) => ipcRenderer.invoke("project:stop", path),
+    reveal: (path) => ipcRenderer.invoke("project:reveal", path),
     addExisting: () => ipcRenderer.invoke("projects:addExisting"),
     onChange: (handler) => {
       ipcRenderer.on("projects:changed", () => handler());
