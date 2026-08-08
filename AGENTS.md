@@ -102,6 +102,7 @@ Not spelled out here. `msync help <group>` lists any of these in full.
 | --- | --- |
 | Capture | `photo`, `authorize` |
 | Playtest | `playtest`, `playing`, `stop`, `run`, `test` |
+| Sync | `sync`, `changes`, `accept`, `cancel`, `connect`, `disconnect` |
 | Info | `capabilities`, `status`, `projects`, `commands`, `doctor`, `help`, `new-command`, `map`, `agents` |
 | Deen | `verse` |
 

@@ -48,6 +48,7 @@ local MODULES = {
 	require(script.Clipboard),
 	require(script.Mutate),
 	require(script.Runtime),
+	require(script.Sync),
 	require(script.Capture),
 	require(script.Playtest),
 	require(script.Query),

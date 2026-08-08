@@ -46,7 +46,17 @@ function Error.new(err: Error, ...): Error
 	err = table.clone(err)
 
 	for i, v in { ... } do
-		err.message = err.message:gsub("$" .. i, Util.stringify(v))
+		-- A function replacement rather than a string one. gsub treats `%` in a
+		-- replacement string as an escape, so any value containing one — a
+		-- property holding "100%", a name with a percent in it — threw "invalid
+		-- use of '%' in replacement string" while building the message.
+		--
+		-- Building an error must not be able to fail. This one did, and it took
+		-- the sync session with it from inside a path whose entire intent was to
+		-- log a warning and skip one instance.
+		err.message = err.message:gsub("%$" .. i, function()
+			return Util.stringify(v)
+		end)
 	end
 
 	return err

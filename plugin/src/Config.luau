@@ -60,7 +60,10 @@ local DEFAULTS = {
 	Https = false,
 	DiffLinesLimit = 3000,
 	DisplayPrompts = "Always",
-	ChangesThreshold = 5,
+	-- Argon shipped 5, which is a sensible number for hand edits and a useless
+	-- one for anything an agent does: a folder reorganization is hundreds of
+	-- changes, and a modal nobody is sitting in front of stalls the sync.
+	ChangesThreshold = 5000,
 	LogLevel = "Warn",
 	OverridePackages = true,
 	-- Shared secret from ~/.argon/auth.token - proves requests come from

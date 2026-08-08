@@ -163,6 +163,40 @@ export const COMMANDS = {
   },
 
   // ------------------------------------------------------------- playtest
+  sync: {
+    op: "sync_status",
+    group: "Sync",
+    summary: "Is this place syncing, and is it waiting on a prompt",
+  },
+  changes: {
+    op: "sync_changes",
+    group: "Sync",
+    summary: "What a waiting sync prompt would apply, instance by instance",
+  },
+  accept: {
+    op: "sync_accept",
+    group: "Sync",
+    summary: "Answer the waiting sync prompt yes",
+    examples: ["msync accept --place 130505358256570"],
+  },
+  cancel: {
+    op: "sync_cancel",
+    group: "Sync",
+    summary: "Answer the waiting sync prompt no (this ends the session)",
+  },
+  connect: {
+    op: "sync_connect",
+    group: "Sync",
+    summary: "Attach this place to a project, starting its server if needed",
+    positional: { optional: ["project"] },
+    timeoutMs: 30000,
+    examples: ["msync connect", "msync connect ED2"],
+  },
+  disconnect: {
+    op: "sync_disconnect",
+    group: "Sync",
+    summary: "Detach this place from its project",
+  },
   playtest: {
     op: "playtest_start",
     group: "Playtest",
@@ -280,6 +314,9 @@ export const MUTATING = new Set([
   "eval", "undo", "redo",
   "copy", "paste",
   "playtest", "stop", "run", "test",
+  // Answering a prompt or attaching a place changes what Studio holds, so they
+  // get the same "say which place" treatment as any other write.
+  "accept", "cancel", "connect", "disconnect",
 ]);
 
 // Available on every op, so it is documented once rather than on each command.
@@ -287,7 +324,7 @@ export const GLOBAL_FLAGS = {
   place: "which connected place to act on — its ref, name, or placeId (see `msync status`)",
 };
 
-export const GROUPS = ["Navigate", "Write", "Studio", "Capture", "Playtest", "Transfer", "Info", "Deen"];
+export const GROUPS = ["Navigate", "Write", "Studio", "Capture", "Playtest", "Sync", "Transfer", "Info", "Deen"];
 
 /** The registry an agent reads. Derived, never hand-maintained. */
 export function registry(available = () => true) {

@@ -5,7 +5,6 @@ local plugin = script:FindFirstAncestorWhichIsA("Plugin")
 
 local MuslimSync = script:FindFirstAncestor("MuslimSync")
 local Packages = MuslimSync.Packages
-local Helpers = MuslimSync.Helpers
 
 local Components = script.Components
 local Widgets = script.Widgets
@@ -22,7 +21,6 @@ local Util = require(MuslimSync.Util)
 local Core = require(MuslimSync.Core)
 local Log = require(MuslimSync.Log)
 local Discovery = require(MuslimSync.Discovery)
-local describeChanges = require(Helpers.describeChanges)
 
 local Assets = require(script.Assets)
 local Loader = require(script.Loader)
@@ -44,12 +42,13 @@ local ProjectDetails = require(Pages.ProjectDetails)
 local Connecting = require(Pages.Connecting)
 local Connected = require(Pages.Connected)
 local Unavailable = require(Pages.Unavailable)
-local Prompt = require(Pages.Prompt)
 local Error = require(Pages.Error)
 
 local Settings = require(Widgets.Settings)
 local Help = require(Widgets.Help)
 local Diff = require(Widgets.Diff)
+local Bridge = require(MuslimSync.Control.Bridge)
+local askUser = require(script.askUser)
 
 local New = Fusion.New
 local Value = Fusion.Value
@@ -72,6 +71,9 @@ function App.new()
 	Loader.load()
 
 	local self = setmetatable({}, App)
+
+	-- So the control channel can drive the same session the panel drives.
+	Bridge.setApp(self)
 
 	-- Ship Info/Warn/Error logs to the master so diagnostics survive
 	-- Studio closing (persisted in ~/.argon/logs/plugin.log)
@@ -658,46 +660,7 @@ function App:connect()
 	self.core:onPrompt(function(message, changes, tree)
 		loading = false
 
-		local signal = Signal.new()
-		local result = false
-
-		self:setIcon("Warn")
-
-		-- Prompt user to accept or reject incoming changes
-		if changes then
-			local options = { "Accept", "Diff", "Cancel" }
-			message = describeChanges(changes)
-
-			self:setPage(Prompt {
-				App = self,
-				Message = message,
-				Options = options,
-				Signal = signal,
-			})
-
-			local choice = signal:Wait()
-
-			while choice == "Diff" do
-				self:diff(changes, tree)
-				choice = signal:Wait()
-			end
-
-			self:diff()
-
-			result = choice == "Accept"
-		-- Prompt user whether to continue when server ID differs
-		else
-			local options = { "Continue", "Cancel" }
-
-			self:setPage(Prompt {
-				App = self,
-				Message = message,
-				Options = options,
-				Signal = signal,
-			})
-
-			result = signal:Wait() == "Continue"
-		end
+		local result = askUser(self, message, changes, tree)
 
 		if self.core.status == Core.Status.Connected then
 			self:setPage(Connected {
