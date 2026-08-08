@@ -37,6 +37,11 @@ export class Session {
     return this.key;
   }
 
+  /** The place's title, for labelling. Never for selecting — see Daemon#session. */
+  get placeName() {
+    return this.hello.placeName ?? null;
+  }
+
   get placeId() {
     return this.hello.placeId;
   }

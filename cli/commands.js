@@ -260,6 +260,21 @@ export const COMMANDS = {
 };
 
 /** Groups, in the order help should print them. */
+/**
+ * Commands that change the place they run in.
+ *
+ * With more than one place connected these refuse to guess: the default target
+ * is whichever connected most recently, and "most recently connected" is not
+ * something anyone reasons about before typing `rm`. Reads stay permissive —
+ * reading the wrong place is obvious and costs nothing.
+ */
+export const MUTATING = new Set([
+  "set", "new", "rm", "mv", "attr", "tag", "select",
+  "eval", "undo", "redo",
+  "copy", "paste",
+  "playtest", "stop", "run", "test",
+]);
+
 // Available on every op, so it is documented once rather than on each command.
 export const GLOBAL_FLAGS = {
   place: "which connected place to act on — its ref, name, or placeId (see `msync status`)",

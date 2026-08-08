@@ -350,7 +350,53 @@ test("an unpublished place is addressable by its marker, not by placeId 0", () =
 
   assert.equal(daemon.session("aaaaaaaa").placeName, "Lobby");
   assert.equal(daemon.session("bbbbbbbb").placeName, "Arena");
-  assert.equal(daemon.session("arena").placeName, "Arena", "matching by name should work too");
   assert.equal(daemon.session().placeName, "Arena", "no selector means the most recent");
   assert.equal(daemon.session("nope"), null);
+  assert.equal(daemon.session("arena"), null, "a name is a label, not a selector");
+});
+
+test("a place is never selected by name", async () => {
+  // Every unpublished place is called "Place1" and a substring can match
+  // several, so a name is exactly the wrong way to choose what `rm` runs in.
+  const make = (key, ref, placeName) => ({ key, ref, placeId: "0", placeName });
+
+  class Fake extends Daemon {
+    constructor(list) {
+      super({ port: 0 });
+      this.list = list;
+    }
+
+    get sessions() {
+      return this.list;
+    }
+  }
+
+  const daemon = new Fake([make("1", "aaaa1111", "Place1"), make("2", "bbbb2222", "Place1")]);
+
+  assert.equal(daemon.session("Place1"), null, "a name must not select anything");
+  assert.equal(daemon.session("place"), null);
+  assert.equal(daemon.session("aaaa1111").key, "1", "the identifier does select");
+});
+
+test("an unambiguous prefix works, an ambiguous one does not", async () => {
+  // A published placeId is eighteen digits; nobody should have to type all of
+  // it. But two matches means the caller has not said which.
+  const make = (key, ref) => ({ key, ref, placeId: "0", placeName: null });
+
+  class Fake extends Daemon {
+    constructor(list) {
+      super({ port: 0 });
+      this.list = list;
+    }
+
+    get sessions() {
+      return this.list;
+    }
+  }
+
+  const daemon = new Fake([make("1", "13166507"), make("2", "13050535")]);
+
+  assert.equal(daemon.session("131").key, "1");
+  assert.equal(daemon.session("130").key, "2");
+  assert.equal(daemon.session("13"), null, "a prefix matching both selects neither");
 });

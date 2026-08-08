@@ -106,9 +106,14 @@ msync paste ServerScriptService --place 2
 Several paths at once also work, and \`msync copy\` with no path takes whatever
 is selected in Studio. With only one place open, \`--place\` can be left off.
 
-**Pass \`--place\` whenever more than one place is connected.** Without it a
-command goes to whichever place connected most recently, which is a guess — and
-for \`rm\`, \`set\` or \`paste\` it is a guess that writes to the wrong game.
+**Anything that changes a place refuses to run without \`--place\` when more
+than one is connected.** It is not advice; the command exits 2 and lists the
+identifiers. The default target is whichever place connected most recently, so
+the user opening another place in Studio silently moves it — which is fine for
+a read and not fine for a write.
+
+Select by identifier, never by name: every unpublished place is called
+"Place1". \`msync status\` prints the \`--place\` value for each.
 
 It is a real .rbxm round-trip through SerializationService, so what lands is the
 exact instances — scripts with their source, properties, and everything nested

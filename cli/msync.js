@@ -6,7 +6,7 @@
 // CLI, the app, and an agent all go through exactly the same path.
 
 import { parse, bind, coerce, UsageError } from "./args.js";
-import { COMMANDS, registry } from "./commands.js";
+import { COMMANDS, MUTATING, registry } from "./commands.js";
 import { render, help, commandHelp, groupHelp, red, dim } from "./format.js";
 import { writeFileSync } from "node:fs";
 import path from "node:path";
@@ -18,6 +18,7 @@ import { explainUnreachable } from "./reach.js";
 import { send } from "./transport.js";
 import { readConfig, isEnabled, whyDisabled, ConfigError } from "./config.js";
 import { waitForContext } from "./playtest.js";
+import { findProjectFile, projectIdentity, inferPlace } from "./place.js";
 
 const APP_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -294,6 +295,40 @@ async function main(argv) {
     }
   }
 
+  // Which place this is about. The working directory answers it almost every
+  // time — an agent editing a project means that project's place — so it is
+  // asked before anyone is made to type an identifier.
+  let place = flags.place;
+
+  if (!place && MUTATING.has(command)) {
+    const health = await send({ port, route: "/health" })
+      .then((response) => JSON.parse(response.body.toString("utf8")))
+      .catch(() => null);
+
+    const open = health?.plugins ?? [];
+    const inferred = inferPlace(open, projectIdentity(findProjectFile()));
+
+    if (inferred) {
+      place = inferred.ref;
+      if (open.length > 1) {
+        process.stderr.write(`${dim(`using ${inferred.placeName ?? inferred.ref} — this directory's place`)}\n`);
+      }
+    } else if (open.length > 1) {
+      // Identifiers only. A name is shown to tell them apart by eye, but is
+      // not something you can pass: every unpublished place is "Place1".
+      const list = open.map((plugin) => {
+        const ref = String(plugin.ref);
+        return `  --place ${ref}${" ".repeat(Math.max(2, 22 - ref.length))}${plugin.placeName ?? "unnamed"}`;
+      });
+
+      throw new Fatal(
+        EXIT.usage,
+        `${open.length} places are connected, so ${command} needs --place to say which:\n${list.join("\n")}\n` +
+          `\nOpening another place in Studio changes the default, so a write does not guess.`,
+      );
+    }
+  }
+
   const startedAt = Date.now();
   const args = opArguments(command, spec, positionals, flags);
 
@@ -325,7 +360,7 @@ async function main(argv) {
     args,
     // Which place. Without it the daemon uses the most recently connected,
     // which is a guess when more than one is open.
-    placeId: flags.place,
+    placeId: place,
     // A capture ships megabytes of RGBA through base64 chunks; the default is
     // sized for reads that answer instantly.
     timeoutMs: spec.timeoutMs,

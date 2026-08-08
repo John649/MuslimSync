@@ -61,9 +61,14 @@ export class Daemon extends EventEmitter {
   /**
    * The session a request should go to.
    *
-   * `place` selects by session key, by placeId, or by a case-insensitive
-   * substring of the place name — because every unpublished place reports
-   * placeId 0, so the id alone cannot tell two of them apart.
+   * Selection is by identifier only — never by name. Every unpublished place
+   * is called "Place1", and a substring can match several, so a name is exactly
+   * the wrong way to choose the target of an `rm`.
+   *
+   * An identifier is the placeId when published, the argonId marker when not,
+   * and the connection key when a place has neither. A prefix works when it
+   * picks out exactly one; an ambiguous prefix selects nothing rather than
+   * guessing.
    *
    * With nothing given it is the most recently connected place. That is a guess
    * dressed as a default, so `sessions.length > 1` is reported to the caller,
@@ -75,13 +80,21 @@ export class Daemon extends EventEmitter {
 
     const wanted = String(place).toLowerCase();
 
-    return (
+    const exact =
       this.sessions.find((session) => session.ref.toLowerCase() === wanted) ??
       this.sessions.find((session) => session.key === wanted) ??
-      this.sessions.find((session) => session.placeId === String(place)) ??
-      this.sessions.find((session) => (session.placeName ?? "").toLowerCase().includes(wanted)) ??
-      null
+      this.sessions.find((session) => session.placeId === String(place));
+
+    if (exact) return exact;
+
+    // A full placeId is eighteen digits, so a prefix is worth accepting — but
+    // only when it is unambiguous. Two matches means the caller has not said
+    // which, and picking one would be the guess this exists to prevent.
+    const prefixed = this.sessions.filter(
+      (session) => session.ref.toLowerCase().startsWith(wanted) || session.key.startsWith(wanted),
     );
+
+    return prefixed.length === 1 ? prefixed[0] : null;
   }
 
   status() {
@@ -99,6 +112,9 @@ export class Daemon extends EventEmitter {
         session: session.key,
         placeId: session.placeId,
         gameId: session.gameId,
+        // For inferring the target from the working directory: an unpublished
+        // place has no usable placeId, and this is what identifies it.
+        argonId: session.hello.argonId ?? null,
         placeName: session.hello.placeName,
         pluginVersion: session.hello.pluginVersion,
         connectedAt: session.connectedAt,
@@ -115,7 +131,7 @@ export class Daemon extends EventEmitter {
       const error = new Error(
         placeId
           ? `no connected place matches "${placeId}". Open ones: ${
-              this.sessions.map((s) => s.placeName ?? s.key).join(", ") || "none"
+              this.sessions.map((s) => `${s.ref} (${s.placeName ?? "unnamed"})`).join(", ") || "none"
             }`
           : "no Studio plugin is connected",
       );
