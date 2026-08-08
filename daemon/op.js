@@ -51,6 +51,33 @@ export async function handleOp(daemon, request, response) {
     args.artifact = daemon.clipboard;
   }
 
+  // Studio plays one place at a time, for the whole application. Starting a
+  // playtest while another place is already in play mode does nothing, reports
+  // success, and leaves the caller waiting out a context timeout for something
+  // that was never coming.
+  if (call.op === "playtest_start") {
+    const busy = [];
+
+    for (const session of daemon.sessions) {
+      const playing = await session.request("playtest_status", {}, { timeoutMs: 8000 }).catch(() => null);
+      if (playing?.contexts?.length) busy.push(session);
+    }
+
+    if (busy.length) {
+      const where = busy.map((session) => `${session.placeName ?? session.ref} (--place ${session.ref})`).join(", ");
+
+      reply(200, {
+        ok: false,
+        error: {
+          code: ERROR.CONFLICT,
+          message: `Studio is already playing ${where} — stop that first; only one place can be in play mode`,
+          retryable: false,
+        },
+      });
+      return;
+    }
+  }
+
   try {
     const startedAt = Date.now();
 

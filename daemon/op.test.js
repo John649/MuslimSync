@@ -163,3 +163,69 @@ test("a published place still replaces its own stale session", async () => {
   await second.close();
   await daemon.stop();
 });
+
+test("a playtest is refused while another place is already playing", async () => {
+  // Studio plays one place at a time for the whole application. Starting a
+  // second does nothing, reports success, and leaves the caller waiting out a
+  // context timeout for something that was never coming — which cost a real
+  // session forty-five seconds of silence per call.
+  const daemon = new Daemon({ port: 0 });
+  await daemon.start();
+
+  const busy = await fakePlugin(daemon.port, {
+    hello: { placeId: "111" },
+    handlers: { playtest_status: () => ({ running: true, contexts: [{ name: "server", kind: "server" }] }) },
+  }).connect();
+
+  const idle = await fakePlugin(daemon.port, {
+    hello: { placeId: "222" },
+    handlers: { playtest_status: () => ({ running: false, contexts: [] }) },
+  }).connect();
+
+  await settled();
+
+  try {
+    const response = await fetch(`http://127.0.0.1:${daemon.port}/op`, {
+      method: "POST",
+      body: JSON.stringify({ op: "playtest_start", args: {}, placeId: "222" }),
+    });
+
+    const value = await response.json();
+
+    assert.equal(value.ok, false);
+    assert.match(value.error.message, /already playing/);
+    assert.match(value.error.message, /only one place/);
+  } finally {
+    busy.close();
+    idle.close();
+    await daemon.stop();
+  }
+});
+
+test("a playtest starts normally when nothing else is playing", async () => {
+  const daemon = new Daemon({ port: 0 });
+  await daemon.start();
+
+  const plugin = await fakePlugin(daemon.port, {
+    handlers: {
+      playtest_status: () => ({ running: false, contexts: [] }),
+      playtest_start: () => ({ started: true, mode: "play" }),
+    },
+  }).connect();
+
+  await settled();
+
+  try {
+    const response = await fetch(`http://127.0.0.1:${daemon.port}/op`, {
+      method: "POST",
+      body: JSON.stringify({ op: "playtest_start", args: {} }),
+    });
+
+    const value = await response.json();
+    assert.equal(value.ok, true);
+    assert.equal(value.value.started, true);
+  } finally {
+    plugin.close();
+    await daemon.stop();
+  }
+});
