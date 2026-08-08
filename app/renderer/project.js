@@ -16,6 +16,8 @@ const el = {
   sync: document.getElementById("detail-sync"),
   serve: document.getElementById("detail-serve"),
   identity: document.getElementById("detail-identity"),
+  mapped: document.getElementById("detail-mapped"),
+  map: document.getElementById("detail-map"),
 };
 
 // Which project's settings are open, or null for the list.
@@ -49,6 +51,9 @@ async function renderDetail() {
     : "not serving";
   el.serve.textContent = project.running ? "Stop" : "Serve";
 
+  el.mapped.textContent = (project.services ?? []).join(", ") || "none";
+  el.map.disabled = false;
+
   const identity = [];
   if (project.gameId) identity.push(`game ${project.gameId}`);
   if (project.placeIds?.length) identity.push(`place ${project.placeIds.join(", ")}`);
@@ -68,6 +73,19 @@ el.back.addEventListener("click", () => {
 });
 
 el.reveal.addEventListener("click", () => api.projects.reveal(openPath));
+
+el.map.addEventListener("click", async () => {
+  el.map.disabled = true;
+
+  const { added } = await api.projects.map(openPath);
+
+  el.mapped.textContent = added.length
+    ? `added ${added.join(", ")} — restart the sync so argon picks them up`
+    : "already maps every code-bearing service";
+
+  // Re-read rather than patch: the list is the source of truth for the panel.
+  await renderDetail();
+});
 
 // Renaming on blur rather than on every keystroke: a rename per character
 // would rewrite the project file a dozen times for one edit.

@@ -180,6 +180,32 @@ export async function local(name, { flags, positionals = [], port, daemon, Fatal
       };
     }
 
+    case "map": {
+      const { widenTree, projectFileIn } = await import("../daemon/projects.js");
+      const { findProjectFile } = await import("./place.js");
+
+      // The directory you are in is the project you mean, same as everywhere
+      // else; --dir is for the times it is not.
+      const file = flags.dir ? projectFileIn(path.resolve(String(flags.dir))) : findProjectFile();
+
+      if (!file) throw new Fatal(EXIT.usage, "no project file here — run this inside a project, or pass --dir");
+
+      const project = path.dirname(file);
+      const added = widenTree(project);
+
+      return {
+        json: { project, added },
+        text: added.length
+          ? [
+              `mapped ${added.length} more service(s) in ${path.basename(project)}:`,
+              ...added.map((service) => `  ${service}`),
+              "",
+              dim("restart the sync for this project so argon picks them up"),
+            ].join("\n")
+          : `${path.basename(project)} already maps every code-bearing service`,
+      };
+    }
+
     case "doctor": {
       const { read, DIR } = await import("../app/settings.js");
       void DIR;

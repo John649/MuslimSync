@@ -242,6 +242,13 @@ export const COMMANDS = {
       "msync new-command sweep-shots --kind node --global",
     ],
   },
+  map: {
+    local: "map",
+    group: "Info",
+    summary: "Add the code-bearing services this project does not map yet",
+    flags: { dir: "which project (default: the one you are in)" },
+    examples: ["msync map", "msync map --dir ~/projects/MyGame"],
+  },
   agents: {
     local: "agents",
     group: "Info",

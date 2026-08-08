@@ -110,6 +110,9 @@ export function list(root, { running = new Map() } = {}) {
       gameId: project.gameId ?? null,
       placeIds: Array.isArray(project.placeIds) ? project.placeIds : [],
       argonId: project.argonId ?? null,
+      // Which services actually reach disk. Anything absent lives only in the
+      // place: invisible to git, to grep, and to an agent's file tools.
+      services: Object.keys(project.tree ?? {}).filter((key) => !key.startsWith("$")),
       running: Boolean(session),
       host: session?.host ?? null,
       port: session?.port ?? null,
@@ -282,4 +285,58 @@ export function rename(projectPath, name) {
   writeFileSync(file, `${JSON.stringify(project, null, 2)}\n`);
 
   return { path: projectPath, name: trimmed, changed: true };
+}
+
+/**
+ * Services that hold code, and where their files go.
+ *
+ * `argon init` maps three, which leaves ServerStorage — an ordinary home for
+ * server modules — with no file behind it. Anything unmapped is invisible to
+ * git, to grep, and to an agent's file tools, and the only way to read it is
+ * through Studio.
+ *
+ * Workspace is deliberately absent. Mapping it serialises every part in the
+ * place to disk: enormous, rewritten on every nudge of a model, and merge
+ * conflicts nobody can read. Lighting and the other property-only services are
+ * out for the same reason in miniature — they hold settings, not source.
+ */
+const CODE_SERVICES = {
+  ServerStorage: "src/ServerStorage",
+  ReplicatedFirst: "src/ReplicatedFirst",
+  StarterGui: "src/StarterGui",
+  StarterPack: "src/StarterPack",
+};
+
+/**
+ * Adds the code-bearing services argon init leaves out.
+ *
+ * Only ever adds: a service already in the tree is one the user or argon
+ * decided on, and overwriting it would move their files.
+ */
+export function widenTree(projectPath) {
+  // projectFileIn returns a full path, not a name — joining it again produces
+  // a path that does not exist, and the catch below would swallow that whole.
+  const file = projectFileIn(projectPath);
+  if (!file) return [];
+
+  try {
+    const project = JSON.parse(readFileSync(file, "utf8"));
+    const added = [];
+
+    for (const [service, into] of Object.entries(CODE_SERVICES)) {
+      if (project.tree?.[service]) continue;
+
+      project.tree[service] = { $path: into };
+      mkdirSync(path.join(projectPath, into), { recursive: true });
+      added.push(service);
+    }
+
+    if (added.length) writeFileSync(file, `${JSON.stringify(project, null, 2)}\n`);
+
+    return added;
+  } catch {
+    // A project we cannot read or write still syncs whatever it already maps,
+    // which is worse than intended and not broken.
+    return [];
+  }
 }

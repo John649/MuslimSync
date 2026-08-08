@@ -110,6 +110,13 @@ export function registerTools({ daemon, artifacts, appRoot, directory, record, p
     return { stopped };
   });
 
+  ipcMain.handle("project:map", (_event, projectPath) => {
+    const added = projects.widenTree(projectPath);
+    if (added.length) record("op", `mapped ${added.join(", ")} in ${path.basename(projectPath)}`);
+
+    return { added };
+  });
+
   ipcMain.handle("project:reveal", (_event, projectPath) => {
     // The folder is the project, and it is what someone wants to look at.
     shell.openPath(projectPath);

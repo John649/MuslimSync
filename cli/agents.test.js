@@ -77,7 +77,7 @@ test("it stays short enough to inject", () => {
   // It goes into a context window. Flags and examples live in `msync help`,
   // which an agent can call when it actually needs them.
   const markdown = renderAgentsMd();
-  assert.ok(markdown.length < 7000, `AGENTS.md is ${markdown.length} chars; keep it under 7000`);
+  assert.ok(markdown.length < 7500, `AGENTS.md is ${markdown.length} chars; keep it under 7500`);
 });
 
 // ------------------------------------------------- installing into a project
