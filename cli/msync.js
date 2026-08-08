@@ -18,7 +18,7 @@ import { explainUnreachable } from "./reach.js";
 import { send } from "./transport.js";
 import { readConfig, isEnabled, whyDisabled, ConfigError } from "./config.js";
 import { waitForContext } from "./playtest.js";
-import { findProjectFile, projectIdentity, inferPlace } from "./place.js";
+import { findProjectFile, projectIdentity, inferPlace, mappedToDisk } from "./place.js";
 
 const APP_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -280,7 +280,11 @@ async function main(argv) {
   // grepped across, and it hands back a second copy of the thing you are about
   // to edit on disk. Refused rather than discouraged, because a note in the
   // docs does not stop it happening.
-  if (command === "source" && flags.force !== true) {
+  // Only when that path is actually on disk. A project maps the services it
+  // lists and no others, so ServerStorage and friends have no file behind them
+  // and Studio is the only way to read them — refusing there sent an agent
+  // reaching for --force to do the correct thing.
+  if (command === "source" && flags.force !== true && mappedToDisk(findProjectFile(), positionals[0])) {
     const health = await send({ port, route: "/health" })
       .then((response) => JSON.parse(response.body.toString("utf8")))
       .catch(() => null);

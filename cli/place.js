@@ -87,3 +87,36 @@ export function inferPlace(plugins, identity) {
 
   return null;
 }
+
+/**
+ * Whether a DataModel path is synced to a file.
+ *
+ * A project maps only the services it lists. `argon init` writes three —
+ * ReplicatedStorage, ServerScriptService and StarterPlayerScripts — so
+ * ServerStorage, Lighting, Workspace and the rest have no file behind them, and
+ * reading them through Studio is the only way rather than a shortcut.
+ *
+ * Walking down: a `$path` anywhere on the way means everything below it is on
+ * disk, because that is what `$path` does.
+ */
+export function mappedToDisk(file, instancePath) {
+  if (!file || !instancePath) return false;
+
+  let project;
+  try {
+    project = JSON.parse(readFileSync(file, "utf8"));
+  } catch {
+    return false;
+  }
+
+  let node = project.tree;
+
+  for (const segment of String(instancePath).split("/").filter(Boolean)) {
+    if (!node || typeof node !== "object") return false;
+    if (node.$path) return true;
+
+    node = node[segment];
+  }
+
+  return Boolean(node && typeof node === "object" && node.$path);
+}

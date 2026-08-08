@@ -10,7 +10,7 @@
 
 import { encode, decode } from "@msgpack/msgpack";
 import { spawnSync } from "node:child_process";
-import { writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import * as projects from "./projects.js";
@@ -189,6 +189,57 @@ export function createRoutes({ projectsRoot, argon, artifacts, log = () => {}, c
   };
 }
 
+/**
+ * Services that hold code, and where their files go.
+ *
+ * `argon init` maps three, which leaves ServerStorage — an ordinary home for
+ * server modules — with no file behind it. Anything unmapped is invisible to
+ * git, to grep, and to an agent's file tools, and the only way to read it is
+ * through Studio.
+ *
+ * Workspace is deliberately absent. Mapping it serialises every part in the
+ * place to disk: enormous, rewritten on every nudge of a model, and merge
+ * conflicts nobody can read. Lighting and the other property-only services are
+ * out for the same reason in miniature — they hold settings, not source.
+ */
+const CODE_SERVICES = {
+  ServerStorage: "src/ServerStorage",
+  ReplicatedFirst: "src/ReplicatedFirst",
+  StarterGui: "src/StarterGui",
+  StarterPack: "src/StarterPack",
+};
+
+/**
+ * Adds the code-bearing services argon init leaves out.
+ *
+ * Only ever adds: a service already in the tree is one the user or argon
+ * decided on, and overwriting it would move their files.
+ */
+function widenTree(projectPath) {
+  // projectFileIn returns a full path, not a name — joining it again produces
+  // a path that does not exist, and the catch below would swallow that whole.
+  const file = projects.projectFileIn(projectPath);
+  if (!file) return;
+
+  try {
+    const project = JSON.parse(readFileSync(file, "utf8"));
+    let added = false;
+
+    for (const [service, into] of Object.entries(CODE_SERVICES)) {
+      if (project.tree?.[service]) continue;
+
+      project.tree[service] = { $path: into };
+      mkdirSync(path.join(projectPath, into), { recursive: true });
+      added = true;
+    }
+
+    if (added) writeFileSync(file, `${JSON.stringify(project, null, 2)}\n`);
+  } catch {
+    // A project that argon wrote and we could not widen still syncs the three
+    // services it came with, which is worse than intended and not broken.
+  }
+}
+
 /** Scaffolds a project with the vendored argon, so it matches `argon init` exactly. */
 function scaffold(projectPath) {
   const binary = vendoredArgon();
@@ -199,6 +250,8 @@ function scaffold(projectPath) {
   if (result.status !== 0) {
     throw new HttpError(500, `argon init failed: ${(result.stderr || result.stdout || "").trim().slice(0, 300)}`);
   }
+
+  widenTree(projectPath);
 
   // A new project gets the agent brief without anyone remembering to ask.
   // An agent working in a game repository has no reason to know this tool

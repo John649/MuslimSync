@@ -1,10 +1,10 @@
 import { test, beforeEach, after } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, realpathSync, symlinkSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, realpathSync, symlinkSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { browse, mkdir, list, findByIdentity, plan, claim, projectFileIn, isExistingProject, rootFor } from "./projects.js";
+import { browse, mkdir, list, findByIdentity, plan, claim, projectFileIn, isExistingProject, rootFor, rename } from "./projects.js";
 import { PathEscape } from "./paths.js";
 
 let root;
@@ -352,4 +352,34 @@ test("a place always matches its own project, whatever the game says", () => {
 
   assert.equal(findByIdentity(list(root), { gameId: 600, placeId: 2 })?.name, "B");
   assert.equal(findByIdentity(list(root), { gameId: 600, placeId: 1 })?.name, "A");
+});
+
+test("renaming writes the project file it was given, not a joined path", () => {
+  // projectFileIn returns a full path; joining it onto the directory again
+  // produces a path that does not exist, and the rename silently did nothing.
+  const dir = path.join(root, "renameable");
+  makeProject(dir, { name: "Before" });
+
+  rename(dir, "After");
+
+  assert.equal(JSON.parse(readFileSync(projectFileIn(dir), "utf8")).name, "After");
+});
+
+test("renaming leaves the folder alone", () => {
+  // The folder is what argon serves, what git tracks, and what the plugin
+  // claimed. Renaming it to match a label would break all three.
+  const dir = path.join(root, "stable-folder");
+  makeProject(dir, { name: "Before" });
+
+  rename(dir, "Something Else");
+
+  assert.ok(existsSync(dir), "the folder must keep its name");
+});
+
+test("a blank name is refused rather than written", () => {
+  const dir = path.join(root, "named");
+  makeProject(dir, { name: "Keep" });
+
+  assert.throws(() => rename(dir, "   "), /needs a name/);
+  assert.equal(JSON.parse(readFileSync(projectFileIn(dir), "utf8")).name, "Keep");
 });

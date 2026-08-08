@@ -363,3 +363,32 @@ test("a new project is scaffolded with the agent brief", async () => {
   assert.ok(existsSync(brief), "expected AGENTS.md in the new project");
   assert.match(readFileSync(brief, "utf8"), /## MuslimSync/);
 });
+
+test("a new project maps the services that hold code", async () => {
+  // argon init writes three, which leaves ServerStorage with no file behind it
+  // — invisible to git, to grep, and to an agent's file tools.
+  const created = await call("POST", "/createProject", { name: "Wide", gameId: 700, placeId: 701 });
+  const file = path.join(created.value.path, "default.project.json");
+  const project = JSON.parse(readFileSync(file, "utf8"));
+
+  for (const service of ["ReplicatedStorage", "ServerScriptService", "ServerStorage", "StarterGui"]) {
+    assert.ok(project.tree[service], `${service} should be mapped`);
+  }
+});
+
+test("Workspace is left unmapped on purpose", async () => {
+  // Mapping it serialises every part to disk: enormous, rewritten whenever a
+  // model is nudged, and merge conflicts nobody can read.
+  const created = await call("POST", "/createProject", { name: "NoWorkspace", gameId: 702, placeId: 703 });
+  const project = JSON.parse(readFileSync(path.join(created.value.path, "default.project.json"), "utf8"));
+
+  assert.equal(project.tree.Workspace, undefined);
+});
+
+test("a service argon already mapped is left alone", async () => {
+  // Overwriting it would move someone's files.
+  const created = await call("POST", "/createProject", { name: "Keep", gameId: 704, placeId: 705 });
+  const project = JSON.parse(readFileSync(path.join(created.value.path, "default.project.json"), "utf8"));
+
+  assert.equal(project.tree.ReplicatedStorage.$path, "src/Shared", "argon's own mapping must survive");
+});

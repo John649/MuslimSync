@@ -270,16 +270,16 @@ export function rename(projectPath, name) {
   if (!trimmed) throw new Error("a project needs a name");
   if (trimmed.length > 100) throw new Error("that name is too long");
 
+  // A full path already, not a name to join onto the directory.
   const file = projectFileIn(projectPath);
   if (!file) throw new Error(`no project file in ${projectPath}`);
 
-  const full = path.join(projectPath, file);
-  const project = JSON.parse(readFileSync(full, "utf8"));
+  const project = JSON.parse(readFileSync(file, "utf8"));
 
   if (project.name === trimmed) return { path: projectPath, name: trimmed, changed: false };
 
   project.name = trimmed;
-  writeFileSync(full, `${JSON.stringify(project, null, 2)}\n`);
+  writeFileSync(file, `${JSON.stringify(project, null, 2)}\n`);
 
   return { path: projectPath, name: trimmed, changed: true };
 }
