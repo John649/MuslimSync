@@ -125,6 +125,9 @@ Not spelled out here. `msync help <group>` lists any of these in full.
   costs a round trip per file, cannot be grepped across, and hands you a second
   copy of the thing you are about to edit on disk. Use it only for what is not
   on disk: an unsynced place, or a draft the user has not saved yet.
+- **Never read or write `.Source` through `eval`.** Files are the only source
+  of truth for code in a synced project. Going around the `source` guard with
+  `eval` gets you a stale second copy and edits that sync will overwrite.
 - **Reads are free and cheap.** Prefer `ls`/`tree`/`query` over `eval` for
   anything you could look up; `eval` runs arbitrary code in the user's open
   place.

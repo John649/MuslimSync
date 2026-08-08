@@ -4,6 +4,7 @@
 // dispatcher: one is about the working directory, the other about the project's
 // tree, and msync.js only needs the answer.
 
+import path from "node:path";
 import { MUTATING } from "./commands.js";
 import { findProjectFile, projectIdentity, inferPlace, mappedToDisk } from "./place.js";
 
@@ -19,17 +20,55 @@ const health = (port, send) =>
  * lists and no others, so ServerStorage and friends have no file behind them
  * and Studio is the only way to read them — refusing there sent an agent
  * reaching for --force to do the correct thing.
+ *
+ * Resolved from the *target place's* project, not the caller's directory.
+ * Whether a path is on disk is a fact about the place being read; keying it
+ * off cwd meant an agent running from its own workspace read synced code
+ * through Studio without ever seeing the refusal.
  */
 async function guardSource({ positionals, flags, port, send, Fatal, EXIT }) {
-  if (flags.force === true || !mappedToDisk(findProjectFile(), positionals[0])) return;
+  if (flags.force === true) return;
 
   const state = await health(port, send);
   if (!state?.serving?.length) return;
 
+  // Which connected place this read is aimed at.
+  const open = state.plugins ?? [];
+  const wanted = flags.place ? String(flags.place) : String(state.target ?? "");
+  const plugin =
+    open.find((p) => String(p.ref) === wanted || String(p.placeId) === wanted) ??
+    inferPlace(open, projectIdentity(findProjectFile())) ??
+    (open.length === 1 ? open[0] : null);
+
+  // The served project that claims that place. Each serving path holds its own
+  // project file, so identity comes from the file, not from a name.
+  let file = null;
+  for (const served of state.serving) {
+    const candidate = findProjectFile(served);
+    const identity = projectIdentity(candidate);
+    if (!identity) continue;
+
+    const owns =
+      plugin &&
+      (identity.placeIds.includes(String(plugin.placeId)) ||
+        (identity.argonId && identity.argonId === plugin.argonId) ||
+        (identity.gameId && identity.gameId === String(plugin.gameId)));
+
+    if (owns) {
+      file = candidate;
+      break;
+    }
+  }
+
+  // No served project claims the target: an unsynced place, where Studio is
+  // the only way. The cwd check stays as a fallback for a daemon too old to
+  // report plugins.
+  if (!mappedToDisk(file ?? findProjectFile(), positionals[0])) return;
+
   throw new Fatal(
     EXIT.usage,
     `this place is synced — read the file instead of going through Studio.\n` +
-      `  synced to: ${state.serving.join(", ")}\n` +
+      `  synced to: ${path.dirname(file ?? state.serving[0])}\n` +
       `  --force reads it through Studio anyway, which is for unsaved drafts`,
   );
 }

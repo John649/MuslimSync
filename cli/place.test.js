@@ -94,3 +94,72 @@ test("placeId beats gameId when both could match", () => {
 
   assert.equal(inferPlace(open, identity).ref, "131");
 });
+
+test("source is refused based on the target place's project, not cwd", async (t) => {
+  // The guard used to key off the caller's working directory, so an agent
+  // running from its own workspace read synced code through Studio without
+  // ever seeing the refusal. The mapping belongs to the place being read.
+  const { mkdtempSync, writeFileSync, rmSync, mkdirSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const path = (await import("node:path")).default;
+  const { resolveTarget } = await import("./target.js");
+
+  const root = mkdtempSync(path.join(tmpdir(), "msync-guard-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+
+  const project = path.join(root, "ZombiesProject");
+  mkdirSync(project, { recursive: true });
+  writeFileSync(
+    path.join(project, "default.project.json"),
+    JSON.stringify({
+      name: "zombies",
+      tree: { $className: "DataModel", ReplicatedStorage: { $path: "src/Shared" } },
+      placeIds: [131665072265325],
+    }),
+  );
+
+  const send = async () => ({
+    body: Buffer.from(
+      JSON.stringify({
+        serving: [project],
+        target: "131665072265325",
+        plugins: [{ ref: "131665072265325", placeId: "131665072265325", gameId: "1", argonId: null }],
+      }),
+    ),
+  });
+
+  class Fatal extends Error {
+    constructor(code, message) {
+      super(message);
+      this.code = code;
+    }
+  }
+
+  // cwd is this repo — no project file names that place. The refusal must
+  // come from the served project anyway.
+  await assert.rejects(
+    () =>
+      resolveTarget({
+        command: "source",
+        positionals: ["ReplicatedStorage/SharedModules/Interactables"],
+        flags: {},
+        port: 0,
+        send,
+        Fatal,
+        EXIT: { usage: 2 },
+      }),
+    /this place is synced/,
+  );
+
+  // A path outside the mapped services is still allowed through.
+  const allowed = await resolveTarget({
+    command: "source",
+    positionals: ["ServerStorage/Secrets"],
+    flags: {},
+    port: 0,
+    send,
+    Fatal,
+    EXIT: { usage: 2 },
+  });
+  assert.equal(allowed, undefined);
+});
