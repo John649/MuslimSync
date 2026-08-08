@@ -129,7 +129,30 @@ writeFileSync(
   ].join("\n"),
 );
 
+// Spotlight only surfaces apps from the standard locations. A bundle in dist/
+// is indexed — mdfind finds it — but does not show up when you actually search,
+// which reads as "it didn't work".
+if (process.argv.includes("--install")) {
+  const installed = path.join("/Applications", `${NAME}.app`);
+
+  rmSync(installed, { recursive: true, force: true });
+  cpSync(OUT, installed, { recursive: true, verbatimSymlinks: true });
+
+  // The indexer gets there on its own eventually; this makes it now.
+  try {
+    execFileSync("mdimport", [installed], { stdio: "ignore" });
+  } catch {
+    // Spotlight will pick it up in its own time.
+  }
+
+  console.log(`  installed  ${installed}`);
+}
+
 console.log(`  name       ${NAME}`);
 console.log(`  icon       ${icon ?? "Electron's (no assets/Logo.png)"}`);
 console.log(`  runs       ${path.join(ROOT, "app", "main.js")}`);
-console.log("\nOpen it, or drag it to the Dock or Applications.");
+console.log(
+  process.argv.includes("--install")
+    ? "\nIt is in /Applications, so Spotlight will find it."
+    : "\nOpen it, or `npm run install:app` to put it in /Applications for Spotlight.",
+);
