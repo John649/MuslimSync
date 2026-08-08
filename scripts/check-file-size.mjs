@@ -21,7 +21,7 @@ const EXTENSIONS = new Set([".luau", ".lua", ".js", ".mjs"]);
 
 const GRANDFATHERED = new Map([
   ["plugin/src/App/init.luau", 807],
-  ["plugin/src/App/Widgets/Diff.luau", 486],
+  ["plugin/src/App/Widgets/Diff.luau", 421],
   ["plugin/src/Core/init.luau", 468],
   ["plugin/src/App/Widgets/Settings.luau", 435],
   ["plugin/src/Core/Processor/Write.luau", 417],

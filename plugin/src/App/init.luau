@@ -310,14 +310,25 @@ function App:diff(changes: Types.Changes?, tree: any?)
 		widget:Destroy()
 		widget = nil
 	elseif changes and tree then
-		widget = Diff {
-			Changes = changes,
-			Tree = tree,
-			Closed = function()
-				peek(self.diffWidget):Destroy()
-				self.diffWidget:set(nil)
-			end,
-		}
+		-- Called from inside the sync loop's verify step, so an unguarded throw
+		-- while drawing one row used to disconnect the session: clicking "Diff"
+		-- to inspect a change cost you sync.
+		local ok, built = pcall(function()
+			return Diff {
+				Changes = changes,
+				Tree = tree,
+				Closed = function()
+					peek(self.diffWidget):Destroy()
+					self.diffWidget:set(nil)
+				end,
+			}
+		end)
+
+		if ok then
+			widget = built
+		else
+			warn(`MuslimSync: could not render the diff: {built}`)
+		end
 	end
 
 	self.diffWidget:set(widget)

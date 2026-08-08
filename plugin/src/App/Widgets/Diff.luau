@@ -4,7 +4,6 @@ local Widgets = App.Widgets
 local Components = App.Components
 
 local Fusion = require(MuslimSync.Packages.Fusion)
-local Dom = require(MuslimSync.Lib.Dom)
 
 local GlobalUtil = require(MuslimSync.Util)
 local Types = require(MuslimSync.Types)
@@ -12,6 +11,7 @@ local Theme = require(App.Theme)
 local Assets = require(App.Assets)
 
 local ScriptDiff = require(Widgets.ScriptDiff)
+local DiffFormat = require(Widgets.DiffFormat)
 local Widget = require(Components.Plugin.Widget)
 local ScrollingContainer = require(Components.ScrollingContainer)
 local Collapsible = require(Components.Collapsible)
@@ -30,82 +30,6 @@ local Computed = Fusion.Computed
 local ForValues = Fusion.ForValues
 local cleanup = Fusion.cleanup
 local peek = Fusion.peek
-
-local MAX_VALUE_LENGTH = 80
-
-local function countDescendants(snapshot: Types.AddedSnapshot): number
-	local descendants = 0
-
-	if snapshot.children then
-		descendants = #snapshot.children
-
-		for _, child in snapshot.children do
-			descendants += countDescendants(child)
-		end
-	end
-
-	return descendants
-end
-
-local function countLines(source: string): number
-	return #source:split("\n")
-end
-
-local function getSnapshotSource(snapshot: Types.AddedSnapshot | Types.UpdatedSnapshot): string?
-	local source = snapshot.properties and snapshot.properties.Source
-
-	if not source then
-		return nil
-	end
-
-	local ok, decoded = Dom.EncodedValue.decode(source)
-	return ok and decoded or ""
-end
-
-local function getInstanceSource(instance: Instance): string?
-	if not instance:IsA("LuaSourceContainer") then
-		return nil
-	end
-
-	local ok, source = Dom.readProperty(instance, "Source")
-	return ok and source or ""
-end
-
-local function formatValue(value: any)
-	if type(value) == "string" then
-		value = `"{value}"`
-	elseif typeof(value) == "EnumItem" then
-		value = value.Name
-	end
-
-	value = tostring(value)
-
-	if value:find(",") then
-		value = `({value})`
-	end
-
-	if #value > MAX_VALUE_LENGTH then
-		return value:sub(1, MAX_VALUE_LENGTH - 3) .. "..."
-	end
-
-	return value
-end
-
-local function formatSnapshotValue(encoded: any, decoded: any?): string
-	local ok, value = Dom.EncodedValue.decode(encoded)
-
-	if ok and typeof(decoded) == "EnumItem" then
-		local enum = decoded.EnumType
-		value = enum:FromValue(value)
-	end
-
-	return ok and formatValue(value) or "?"
-end
-
-local function formatInstanceValue(instance: Instance, property: string): (string, any?)
-	local ok, value = Dom.readProperty(instance, property)
-	return ok and formatValue(value), value or "?", nil
-end
 
 type SectionProps = {
 	Title: string,
@@ -175,14 +99,14 @@ local function Property(props: PropertyProps)
 	local text
 
 	if isScript and props.New then
-		local delta = countLines(props.New) - countLines(props.Old)
+		local delta = DiffFormat.countLines(props.New) - DiffFormat.countLines(props.Old)
 		local sign = if delta > 0 then "+" elseif delta < 0 then "-" else "~"
 
 		delta = math.abs(delta)
 
 		text = `<b>{sign}{delta} line{GlobalUtil.plural(delta)}</b>`
 	elseif isScript then
-		local lines = countLines(props.Old)
+		local lines = DiffFormat.countLines(props.Old)
 		text = `<b>{lines} line{GlobalUtil.plural(lines)}</b>`
 	elseif props.New then
 		text = `<b>{props.Old}</b> → <b>{props.New}</b>`
@@ -282,7 +206,7 @@ local function Additions(snapshots: { Types.AddedSnapshot }, tree: any)
 			},
 		}
 
-		local descendants = countDescendants(snapshot)
+		local descendants = DiffFormat.countDescendants(snapshot)
 		if descendants > 0 then
 			table.insert(
 				element,
@@ -293,7 +217,7 @@ local function Additions(snapshots: { Types.AddedSnapshot }, tree: any)
 			)
 		end
 
-		local source = getSnapshotSource(snapshot)
+		local source = DiffFormat.getSnapshotSource(snapshot)
 		if source then
 			table.insert(
 				element,
@@ -333,8 +257,8 @@ local function Updates(snapshots: { Types.UpdatedSnapshot }, tree: any)
 
 		for property, value in snapshot.properties or {} do
 			if property == "Source" then
-				local old = instance and getInstanceSource(instance) or ""
-				local new = getSnapshotSource(snapshot) or ""
+				local old = instance and DiffFormat.getInstanceSource(instance) or ""
+				local new = DiffFormat.getSnapshotSource(snapshot) or ""
 
 				table.insert(
 					element,
@@ -352,7 +276,7 @@ local function Updates(snapshots: { Types.UpdatedSnapshot }, tree: any)
 			local formatted, raw = "?", nil
 
 			if instance then
-				formatted, raw = formatInstanceValue(instance, property)
+				formatted, raw = DiffFormat.formatInstanceValue(instance, property)
 			end
 
 			table.insert(
@@ -360,7 +284,7 @@ local function Updates(snapshots: { Types.UpdatedSnapshot }, tree: any)
 				Property({
 					Name = property,
 					Old = formatted,
-					New = formatSnapshotValue(value, raw),
+					New = DiffFormat.formatSnapshotValue(value, raw),
 				})
 			)
 		end
@@ -390,12 +314,23 @@ local function Removals(objects: { Types.Ref | Instance }, tree: any)
 	local elements = {}
 
 	for _, object in objects do
+		-- A removal arrives either as the instance itself or as a Ref, which is
+		-- a buffer. Resolve it before anything reads a property off it: asking a
+		-- buffer for GetFullName throws, and this runs inside the sync loop's
+		-- verify step, so the throw took the whole session down rather than
+		-- spoiling one row of the diff.
 		local instance = object
-		local name = instance and instance:GetFullName() or "?"
-
 		if typeof(object) == "buffer" then
 			instance = tree:getInstance(object)
 		end
+
+		-- A ref that no longer resolves is normal here — the instance being
+		-- described is the one going away.
+		if typeof(instance) ~= "Instance" then
+			instance = nil
+		end
+
+		local name = instance and instance:GetFullName() or "?"
 
 		local element = {
 			Title {
@@ -417,7 +352,7 @@ local function Removals(objects: { Types.Ref | Instance }, tree: any)
 			)
 		end
 
-		local source = instance and getInstanceSource(instance)
+		local source = instance and DiffFormat.getInstanceSource(instance)
 		if source then
 			table.insert(
 				element,
