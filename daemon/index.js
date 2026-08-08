@@ -13,6 +13,7 @@ import { WebSocketServer } from "ws";
 import { rmSync } from "node:fs";
 
 import { listenOnIpv6, listenOnUnix } from "./listeners.js";
+import { handleOp } from "./op.js";
 
 import { decodeFrame, DEFAULT_PORT, ERROR, MAX_FRAME_BYTES, PROTOCOL } from "./protocol.js";
 import { Session } from "./session.js";
@@ -32,7 +33,7 @@ export class Daemon extends EventEmitter {
   // The cross-project clipboard. A copy in one place has to be pasteable in
   // another without the caller carrying an artifact id around by hand — that
   // is the entire point of calling it a clipboard.
-  #clipboard = null;
+  clipboard = null;
 
   constructor({ port = DEFAULT_PORT, host = HOST, routes = {}, socketFile = null, serving = () => [] } = {}) {
     super();
@@ -200,7 +201,7 @@ export class Daemon extends EventEmitter {
     // The CLI's transport: one op in, one result out. JSON rather than MsgPack
     // because this side is ours, not Argon's.
     if (request.method === "POST" && request.url === "/op") {
-      await this.#handleOp(request, response);
+      await handleOp(this, request, response);
       return;
     }
 
@@ -212,79 +213,6 @@ export class Daemon extends EventEmitter {
 
     response.writeHead(404, { "content-type": "application/json" });
     response.end(JSON.stringify({ ok: false, error: { code: ERROR.NOT_FOUND, message: "no such route" } }));
-  }
-
-  async #handleOp(request, response) {
-    const chunks = [];
-    let total = 0;
-
-    for await (const chunk of request) {
-      total += chunk.length;
-      if (total > MAX_FRAME_BYTES) {
-        response.writeHead(413).end();
-        return;
-      }
-      chunks.push(chunk);
-    }
-
-    const reply = (status, body) => {
-      response.writeHead(status, { "content-type": "application/json" });
-      response.end(JSON.stringify(body));
-    };
-
-    let call;
-    try {
-      call = JSON.parse(Buffer.concat(chunks).toString() || "{}");
-    } catch {
-      reply(400, { ok: false, error: { code: ERROR.INVALID_ARGUMENT, message: "body is not valid JSON" } });
-      return;
-    }
-
-    if (typeof call.op !== "string" || !call.op) {
-      reply(400, { ok: false, error: { code: ERROR.INVALID_ARGUMENT, message: "op is required" } });
-      return;
-    }
-
-    const args = { ...(call.args ?? {}) };
-
-    // Paste with no artifact means "the last thing copied".
-    if (call.op === "clipboard_paste" && !args.artifact) {
-      if (!this.#clipboard) {
-        reply(200, {
-          ok: false,
-          error: { code: ERROR.NOT_FOUND, message: "the clipboard is empty — copy something first", retryable: false },
-        });
-        return;
-      }
-      args.artifact = this.#clipboard;
-    }
-
-    try {
-      const startedAt = Date.now();
-
-      const value = await this.request(call.op, args, {
-        placeId: call.placeId,
-        timeoutMs: Number.isFinite(call.timeoutMs) ? call.timeoutMs : undefined,
-      });
-
-      if (call.op === "clipboard_copy" && value?.artifact) this.#clipboard = value.artifact;
-
-      // Every served op is emitted, which is what makes an activity view worth
-      // opening: without it the feed only fills up when something goes wrong.
-      this.emit("op", { op: call.op, ok: true, ms: Date.now() - startedAt });
-
-      reply(200, { ok: true, value });
-    } catch (cause) {
-      this.emit("op", { op: call.op, ok: false, error: cause.message });
-      // The plugin's own error codes reach the caller intact — the CLI branches
-      // on them, so translating here would lose the distinction between
-      // "not connected" and "the plugin said no".
-      const status = cause.code === ERROR.NOT_CONNECTED ? 503 : 200;
-      reply(status, {
-        ok: false,
-        error: { code: cause.code ?? ERROR.PLUGIN_ERROR, message: cause.message, retryable: cause.retryable === true },
-      });
-    }
   }
 
   #handleSocket(socket) {

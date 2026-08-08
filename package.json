@@ -10,7 +10,7 @@
   "scripts": {
     "start": "node scripts/start.mjs",
     "daemon": "node daemon/index.js",
-    "test": "node --test \"**/*.test.js\"",
+    "test": "node --test --test-timeout=15000 \"**/*.test.js\"",
     "lint:plugin": "cd plugin && selene src/ && stylua --check src/",
     "build:plugin": "node scripts/build-plugin.mjs",
     "build:quran": "node quran/build-dataset.mjs",

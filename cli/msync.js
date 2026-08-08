@@ -18,7 +18,7 @@ import { explainUnreachable } from "./reach.js";
 import { send } from "./transport.js";
 import { readConfig, isEnabled, whyDisabled, ConfigError } from "./config.js";
 import { waitForContext } from "./playtest.js";
-import { findProjectFile, projectIdentity, inferPlace, mappedToDisk } from "./place.js";
+import { resolveTarget } from "./target.js";
 
 const APP_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -280,58 +280,7 @@ async function main(argv) {
   // grepped across, and it hands back a second copy of the thing you are about
   // to edit on disk. Refused rather than discouraged, because a note in the
   // docs does not stop it happening.
-  // Only when that path is actually on disk. A project maps the services it
-  // lists and no others, so ServerStorage and friends have no file behind them
-  // and Studio is the only way to read them — refusing there sent an agent
-  // reaching for --force to do the correct thing.
-  if (command === "source" && flags.force !== true && mappedToDisk(findProjectFile(), positionals[0])) {
-    const health = await send({ port, route: "/health" })
-      .then((response) => JSON.parse(response.body.toString("utf8")))
-      .catch(() => null);
-
-    if (health?.serving?.length) {
-      throw new Fatal(
-        EXIT.usage,
-        `this place is synced — read the file instead of going through Studio.\n` +
-          `  synced to: ${health.serving.join(", ")}\n` +
-          `  --force reads it through Studio anyway, which is for unsaved drafts`,
-      );
-    }
-  }
-
-  // Which place this is about. The working directory answers it almost every
-  // time — an agent editing a project means that project's place — so it is
-  // asked before anyone is made to type an identifier.
-  let place = flags.place;
-
-  if (!place && MUTATING.has(command)) {
-    const health = await send({ port, route: "/health" })
-      .then((response) => JSON.parse(response.body.toString("utf8")))
-      .catch(() => null);
-
-    const open = health?.plugins ?? [];
-    const inferred = inferPlace(open, projectIdentity(findProjectFile()));
-
-    if (inferred) {
-      place = inferred.ref;
-      if (open.length > 1) {
-        process.stderr.write(`${dim(`using ${inferred.placeName ?? inferred.ref} — this directory's place`)}\n`);
-      }
-    } else if (open.length > 1) {
-      // Identifiers only. A name is shown to tell them apart by eye, but is
-      // not something you can pass: every unpublished place is "Place1".
-      const list = open.map((plugin) => {
-        const ref = String(plugin.ref);
-        return `  --place ${ref}${" ".repeat(Math.max(2, 22 - ref.length))}${plugin.placeName ?? "unnamed"}`;
-      });
-
-      throw new Fatal(
-        EXIT.usage,
-        `${open.length} places are connected, so ${command} needs --place to say which:\n${list.join("\n")}\n` +
-          `\nOpening another place in Studio changes the default, so a write does not guess.`,
-      );
-    }
-  }
+  const place = await resolveTarget({ command, positionals, flags, port, send, Fatal, EXIT });
 
   const startedAt = Date.now();
   const args = opArguments(command, spec, positionals, flags);
