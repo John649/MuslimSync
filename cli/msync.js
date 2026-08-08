@@ -267,20 +267,27 @@ async function main(argv) {
     return EXIT.ok;
   }
 
-  if (spec.local) {
-    const result = await local(spec.local, { flags, positionals, port, daemon, Fatal, EXIT, config });
-    process.stdout.write(`${flags.raw ? JSON.stringify(result.json ?? null, null, 2) : result.text}\n`);
-    return EXIT.ok;
-  }
-
-  // Latency is a property of the round trip, which only this end can see —
-  // the plugin has no idea when the request left.
+  // Resolved before the local branch, not after it. `test` is a local command
+  // and a mutating one: it starts a playtest and injects a script. When this
+  // lived below, `msync test --place <id>` parsed the flag, dropped it, and ran
+  // against whichever place Studio had touched most recently — so a test could
+  // report on a place nobody named.
+  //
   // Reading a script through Studio when the same script is a file on disk is
   // a round trip per file for something `cat` returns instantly, it cannot be
   // grepped across, and it hands back a second copy of the thing you are about
   // to edit on disk. Refused rather than discouraged, because a note in the
   // docs does not stop it happening.
   const place = await resolveTarget({ command, positionals, flags, port, send, Fatal, EXIT });
+
+  if (spec.local) {
+    const result = await local(spec.local, { flags, positionals, port, daemon, Fatal, EXIT, config, placeId: place });
+    process.stdout.write(`${flags.raw ? JSON.stringify(result.json ?? null, null, 2) : result.text}\n`);
+    return EXIT.ok;
+  }
+
+  // Latency is a property of the round trip, which only this end can see —
+  // the plugin has no idea when the request left.
 
   const startedAt = Date.now();
   const args = opArguments(command, spec, positionals, flags);
@@ -290,7 +297,9 @@ async function main(argv) {
   // Waiting is what the caller meant by naming a context.
   if (command === "run") {
     await waitForContext(
-      (name, payload) => daemon(port, "/op", { op: name, args: payload, timeoutMs: 15000 }),
+      // Same place the exec below goes to. Without it this waited on the
+      // default place's contexts and then ran somewhere else.
+      (name, payload) => daemon(port, "/op", { op: name, args: payload, placeId: place, timeoutMs: 15000 }),
       args.context ?? "server",
       { log: (message) => process.stderr.write(`${dim(message)}\n`) },
     ).catch((cause) => {

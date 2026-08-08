@@ -20,7 +20,7 @@ import { runTest, formatVerdict, TestFailure } from "./playtest.js";
 import { UsageError } from "./args.js";
 
 /** Commands answered without touching the plugin. */
-export async function local(name, { flags, positionals = [], port, daemon, Fatal, EXIT, config }) {
+export async function local(name, { flags, positionals = [], port, daemon, Fatal, EXIT, config, placeId }) {
   switch (name) {
     case "help":
       return { text: help([], (command) => isEnabled(command, config)) };
@@ -242,7 +242,10 @@ export async function local(name, { flags, positionals = [], port, daemon, Fatal
         throw new Fatal(EXIT.usage, `cannot read ${file}`);
       }
 
-      const op = (name, args = {}) => daemon(port, "/op", { op: name, args, timeoutMs: 120000 });
+      // Every op in the run goes to the same place: start, status, exec and
+      // stop. Leaving it off sent all four to whichever place Studio touched
+      // last, so a test named one place and reported on another.
+      const op = (name, args = {}) => daemon(port, "/op", { op: name, args, placeId, timeoutMs: 120000 });
 
       try {
         const verdict = await runTest(op, {
