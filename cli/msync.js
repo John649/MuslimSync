@@ -8,7 +8,7 @@
 import { parse, bind, coerce, UsageError } from "./args.js";
 import { COMMANDS, MUTATING, registry } from "./commands.js";
 import { render, help, commandHelp, groupHelp, red, dim } from "./format.js";
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { discover, bindArgs, run as runCommand } from "../daemon/commands.js";
@@ -312,8 +312,12 @@ async function main(argv) {
   if (flags.script) {
     try {
       args.source = readFileSync(flags.script, "utf8");
-    } catch {
-      throw new Fatal(EXIT.usage, `cannot read ${flags.script}`);
+    } catch (cause) {
+      // The cause, not just the path. This catch swallowed a ReferenceError —
+      // readFileSync was never imported — and reported it as an unreadable
+      // file, so `run --script` had never once worked and blamed the file for
+      // it every time.
+      throw new Fatal(EXIT.usage, `cannot read ${flags.script}: ${cause.message}`);
     }
   }
 

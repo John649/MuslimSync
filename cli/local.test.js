@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, writeFileSync, rmSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -101,4 +101,28 @@ test("the stop still carries the place when the check itself fails", async () =>
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test("msync.js imports every node:fs call it makes", () => {
+  // `run --script` never worked: readFileSync was not imported in msync.js, so
+  // the read threw a ReferenceError, and a bare `catch` reported it as
+  // "cannot read <path>". The file was always fine; the message blamed it
+  // anyway, which is the worst kind of wrong error — it sends you to inspect
+  // something that was never broken.
+  //
+  // Checked statically because the runtime path needs a live daemon and a
+  // running playtest to reach, which is exactly why nobody noticed for so long.
+  const source = readFileSync(new URL("./msync.js", import.meta.url), "utf8");
+
+  const imported = new Set(
+    [...source.matchAll(/import\s*\{([^}]*)\}\s*from\s*"node:fs"/g)]
+      .flatMap((match) => match[1].split(",").map((name) => name.trim()))
+      .filter(Boolean),
+  );
+
+  const used = new Set(
+    [...source.matchAll(/\b(\w+Sync)\s*\(/g)].map((match) => match[1]),
+  );
+
+  assert.deepEqual([...used].filter((name) => !imported.has(name)), []);
 });
