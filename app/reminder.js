@@ -7,8 +7,12 @@
 // The rule: fire at most once per local day, and if that day's trigger has
 // already passed unfired, fire immediately rather than silently skipping the
 // day. A reminder you never see is worse than one that arrives late.
+//
+// The armed timer lives at the bottom, split from main.js for the line cap the
+// way prayers.js is: `settings`, Notification, and the window are injected, so
+// the file stays importable without Electron and the rules stay pure.
 
-import { dayNumber } from "../quran/daily.js";
+import { verseOfTheDay, dayNumber } from "../quran/daily.js";
 
 export const DEFAULT_TIME = { hour: 9, minute: 0 };
 
@@ -75,4 +79,57 @@ export function msUntilNextCheck(now, time, lastFiredDay) {
   const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, hour, minute, 0, 0);
 
   return tomorrow.getTime() - now.getTime();
+}
+
+// ------------------------------------------------------------- the timer
+
+let reminderTimer = null;
+
+function fireReminder(settings, Notification, getWindow) {
+  const verse = verseOfTheDay();
+  const translation = settings.read().translation;
+  const body = verse.verses.map((v) => v.translations[translation]).join(" ");
+
+  const notification = new Notification({
+    title: `${verse.surah.name} ${verse.ref}`,
+    // One line is enough for a notification; the card has the whole thing.
+    body: body.length > 180 ? `${body.slice(0, 177)}…` : body,
+    silent: false,
+  });
+
+  notification.on("click", () => {
+    const window = getWindow();
+    if (window) {
+      if (window.isMinimized()) window.restore();
+      window.show();
+      window.focus();
+      window.webContents.send("verse:focus");
+    }
+  });
+
+  notification.show();
+
+  settings.update({ lastReminderDay: dayNumber(new Date()) });
+}
+
+export function armReminder(settings, Notification, getWindow) {
+  if (reminderTimer) {
+    clearTimeout(reminderTimer);
+    reminderTimer = null;
+  }
+
+  const current = settings.read();
+  if (!current.reminder.enabled) return;
+
+  const now = new Date();
+
+  if (shouldFire(now, current.reminder, current.lastReminderDay)) {
+    fireReminder(settings, Notification, getWindow);
+  }
+
+  // Re-read after a possible fire so the next delay accounts for it.
+  const after = settings.read();
+  const delay = msUntilNextCheck(new Date(), after.reminder, after.lastReminderDay);
+
+  reminderTimer = setTimeout(() => armReminder(settings, Notification, getWindow), delay);
 }

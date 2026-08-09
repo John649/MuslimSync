@@ -3,7 +3,7 @@ import path from "node:path";
 import { watch } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-import { verseOfTheDay, poolRefs, resolve, dayNumber } from "../quran/daily.js";
+import { verseOfTheDay, poolRefs, resolve } from "../quran/daily.js";
 import { Daemon } from "../daemon/index.js";
 import { socketPath } from "../daemon/socket.js";
 import { ArgonProcesses } from "../daemon/argon.js";
@@ -11,7 +11,7 @@ import { createRoutes } from "../daemon/routes.js";
 import * as projects from "../daemon/projects.js";
 import { Artifacts } from "../daemon/artifacts.js";
 import { registerTools } from "./tools.js";
-import { shouldFire, msUntilNextCheck } from "./reminder.js";
+import { armReminder } from "./reminder.js";
 import { armPrayers, prayersToday } from "./prayers.js";
 import * as settings from "./settings.js";
 
@@ -25,7 +25,6 @@ if (process.platform === "win32") app.setAppUserModelId("com.muslimsync.app");
 const REGISTRY = path.join(settings.DIR, "projects.json");
 
 let window = null;
-let reminderTimer = null;
 let daemon = null;
 let argon = null;
 let artifacts = null;
@@ -69,56 +68,13 @@ function createWindow() {
     shell.openExternal(url);
     return { action: "deny" };
   });
-}
 
-// ------------------------------------------------------------- the reminder
-
-function fireReminder() {
-  const verse = verseOfTheDay();
-  const translation = settings.read().translation;
-  const body = verse.verses.map((v) => v.translations[translation]).join(" ");
-
-  const notification = new Notification({
-    title: `${verse.surah.name} ${verse.ref}`,
-    // One line is enough for a notification; the card has the whole thing.
-    body: body.length > 180 ? `${body.slice(0, 177)}…` : body,
-    silent: false,
+  // The variable must not outlive the window: a destroyed BrowserWindow is not
+  // null, so every `window?.` guard would pass and then throw on the dead
+  // object the next time a timer fires.
+  window.on("closed", () => {
+    window = null;
   });
-
-  notification.on("click", () => {
-    if (window) {
-      if (window.isMinimized()) window.restore();
-      window.show();
-      window.focus();
-      window.webContents.send("verse:focus");
-    }
-  });
-
-  notification.show();
-
-  settings.update({ lastReminderDay: dayNumber(new Date()) });
-}
-
-function armReminder() {
-  if (reminderTimer) {
-    clearTimeout(reminderTimer);
-    reminderTimer = null;
-  }
-
-  const current = settings.read();
-  if (!current.reminder.enabled) return;
-
-  const now = new Date();
-
-  if (shouldFire(now, current.reminder, current.lastReminderDay)) {
-    fireReminder();
-  }
-
-  // Re-read after a possible fire so the next delay accounts for it.
-  const after = settings.read();
-  const delay = msUntilNextCheck(new Date(), after.reminder, after.lastReminderDay);
-
-  reminderTimer = setTimeout(armReminder, delay);
 }
 
 // ------------------------------------------------------------- the daemon
@@ -345,7 +301,7 @@ ipcMain.handle("settings:set", (_event, patch) => {
   const next = settings.update(patch ?? {});
   // A changed time or enabled flag must take effect now, not at the next
   // scheduled wake — otherwise turning the reminder on does nothing all day.
-  armReminder();
+  armReminder(settings, Notification, () => window);
   armPrayers(settings, Notification);
   return next;
 });
@@ -367,7 +323,7 @@ registerTools({
 
 app.whenReady().then(async () => {
   createWindow();
-  armReminder();
+  armReminder(settings, Notification, () => window);
   armPrayers(settings, Notification);
   watchProjectsRoot();
   await startDaemon();
@@ -378,7 +334,7 @@ app.whenReady().then(async () => {
   // A laptop that slept through the trigger wakes here. The timer that was
   // pending during sleep is unreliable, so re-evaluate against the real clock.
   powerMonitor.on("resume", () => {
-    armReminder();
+    armReminder(settings, Notification, () => window);
     // The pending prayer timer slept too; a stale one would fire hours late.
     armPrayers(settings, Notification);
   });
