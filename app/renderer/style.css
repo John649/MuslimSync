@@ -1050,3 +1050,35 @@ strong {
 .project:hover {
   background: var(--content-hover, #35373c);
 }
+
+/* ------------------------------------------------------------ prayer card */
+
+.prayer-list {
+  list-style: none;
+  margin: 10px 0 4px;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px 14px;
+}
+
+.prayer-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 13px;
+  color: var(--text-muted, #b5bac1);
+}
+
+.prayer-row.is-next {
+  background: color-mix(in srgb, var(--accent, #5865f2) 18%, transparent);
+  color: var(--text, #f2f3f5);
+}
+
+.prayer-time {
+  font-variant-numeric: tabular-nums;
+  color: var(--text, #f2f3f5);
+}

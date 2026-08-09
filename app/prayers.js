@@ -4,7 +4,7 @@
 // armed at the next prayer, re-armed after it fires. `settings` and Electron's
 // Notification are injected, so this file stays importable without Electron.
 
-import { nextPrayer } from "../quran/prayer.js";
+import { nextPrayer, prayerTimes, PRAYERS } from "../quran/prayer.js";
 
 let prayerTimer = null;
 let locating = false;
@@ -76,3 +76,29 @@ export function armPrayers(settings, Notification) {
   }, Math.max(1000, next.time.getTime() - Date.now()));
 }
 
+
+/** Today's times for the UI: ISO stamps, the next prayer, and the settings. */
+export function prayersToday(settings) {
+  const prayer = settings.read().prayer ?? {};
+
+  if (!prayer.location) return { ready: false, settings: prayer };
+
+  const now = new Date();
+  const times = prayerTimes(
+    { year: now.getFullYear(), month: now.getMonth() + 1, day: now.getDate() },
+    prayer.location,
+    { method: prayer.method, asr: prayer.asr },
+  );
+  const next = nextPrayer(now, prayer.location, {
+    method: prayer.method,
+    asr: prayer.asr,
+    includeSunrise: false,
+  });
+
+  return {
+    ready: true,
+    times: Object.fromEntries(PRAYERS.map((name) => [name, times[name]?.toISOString() ?? null])),
+    next: next ? { name: next.name, time: next.time.toISOString() } : null,
+    settings: prayer,
+  };
+}

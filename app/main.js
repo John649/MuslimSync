@@ -12,7 +12,7 @@ import * as projects from "../daemon/projects.js";
 import { Artifacts } from "../daemon/artifacts.js";
 import { registerTools } from "./tools.js";
 import { shouldFire, msUntilNextCheck } from "./reminder.js";
-import { armPrayers } from "./prayers.js";
+import { armPrayers, prayersToday } from "./prayers.js";
 import * as settings from "./settings.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -324,6 +324,8 @@ ipcMain.handle("verse:copy", (_event, text) => {
   clipboard.writeText(String(text));
   return true;
 });
+
+ipcMain.handle("prayers:today", () => prayersToday(settings));
 
 ipcMain.handle("settings:get", () => settings.read());
 

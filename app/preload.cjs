@@ -63,6 +63,9 @@ contextBridge.exposeInMainWorld("muslimsync", {
   conflicts: {
     list: () => ipcRenderer.invoke("conflicts:list"),
   },
+  prayers: {
+    today: () => ipcRenderer.invoke("prayers:today"),
+  },
   settings: {
     get: () => ipcRenderer.invoke("settings:get"),
     set: (patch) => ipcRenderer.invoke("settings:set", patch),

@@ -109,6 +109,19 @@
           </div>
         </section>
 
+        <!-- Prayer times, same embed language as the verse. -->
+        <section class="embed" id="prayers" aria-label="Prayer times">
+          <div class="embed-head">
+            <span class="embed-author">Prayer times</span>
+            <span class="embed-tag" id="prayers-city"></span>
+          </div>
+          <ul class="prayer-list" id="prayers-list"></ul>
+          <div class="embed-foot">
+            <span class="embed-ref" id="prayers-next"></span>
+          </div>
+        </section>
+
+
         <!-- User panel -->
         <footer class="panel">
           <span class="avatar">
@@ -396,6 +409,50 @@
                   </label>
                 </div>
               </div>
+
+              <h2 class="group-title">Prayer times</h2>
+              <div class="group">
+                <div class="row">
+                  <div class="row-copy">
+                    <span class="row-label">Reminders</span>
+                    <span class="row-help">A notification at each prayer.</span>
+                  </div>
+                  <label class="switch">
+                    <input type="checkbox" id="prayer-enabled" />
+                    <span class="switch-track" aria-hidden="true"></span>
+                  </label>
+                </div>
+                <div class="row">
+                  <div class="row-copy">
+                    <span class="row-label">Location</span>
+                    <span class="row-help" id="prayer-location-help">Found from your IP; correct it if it's off.</span>
+                  </div>
+                  <input class="field" type="text" id="prayer-location" placeholder="latitude, longitude" spellcheck="false" />
+                </div>
+                <div class="row">
+                  <div class="row-copy">
+                    <span class="row-label">Method</span>
+                    <span class="row-help">Which convention computes Fajr and Isha.</span>
+                  </div>
+                  <select class="field" id="prayer-method">
+                    <option value="mwl">Muslim World League</option>
+                    <option value="isna">ISNA (North America)</option>
+                    <option value="egypt">Egyptian Authority</option>
+                    <option value="makkah">Umm al-Qura (Makkah)</option>
+                    <option value="karachi">Karachi</option>
+                  </select>
+                </div>
+                <div class="row">
+                  <div class="row-copy">
+                    <span class="row-label">Asr</span>
+                    <span class="row-help">Hanafi puts Asr later.</span>
+                  </div>
+                  <select class="field" id="prayer-asr">
+                    <option value="standard">Standard (Shafi'i, Maliki, Hanbali)</option>
+                    <option value="hanafi">Hanafi</option>
+                  </select>
+                </div>
+              </div>
             </div>
           </section>
         </main>
@@ -403,6 +460,7 @@
     </div>
 
     <script type="module" src="app.js"></script>
+    <script type="module" src="prayer.js"></script>
     <script type="module" src="tools.js"></script>
     <script type="module" src="project.js"></script>
   </body>
