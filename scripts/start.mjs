@@ -15,13 +15,17 @@
 import { execFileSync, spawn } from "node:child_process";
 import { existsSync, statSync, readdirSync } from "node:fs";
 import path from "node:path";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const BUNDLE = path.join(ROOT, "dist", "MuslimSync.app");
 
 function electronDirectly() {
-  const electron = path.join(ROOT, "node_modules", ".bin", "electron");
+  // The electron package's main export is the absolute path to the binary for
+  // this platform. `node_modules/.bin/electron` is not: it is a shell script
+  // Windows cannot execute, and its .cmd twin is refused by Node's spawn.
+  const electron = createRequire(import.meta.url)("electron");
   spawn(electron, [ROOT, ...process.argv.slice(2)], { stdio: "inherit" }).on("exit", (code) =>
     process.exit(code ?? 0),
   );
