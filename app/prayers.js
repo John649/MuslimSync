@@ -7,6 +7,32 @@
 import { nextPrayer } from "../quran/prayer.js";
 
 let prayerTimer = null;
+let locating = false;
+
+// No location stored: ask the network where we are, once, and keep the answer.
+// A wrong city means wrong times, so the notification body names the city and
+// the settings file is where to correct it.
+async function locate(settings) {
+  if (locating) return;
+  locating = true;
+
+  try {
+    const response = await fetch("http://ip-api.com/json/?fields=status,lat,lon,city", {
+      signal: AbortSignal.timeout(5000),
+    });
+    const body = await response.json();
+    if (body.status !== "success") return;
+
+    const current = settings.read().prayer ?? {};
+    settings.update({
+      prayer: { ...current, location: { latitude: body.lat, longitude: body.lon }, city: body.city },
+    });
+  } catch {
+    // Offline: stay quiet and try again next arm.
+  } finally {
+    locating = false;
+  }
+}
 
 
 // One timer armed at the next prayer. Unlike the daily verse there is no
@@ -19,7 +45,14 @@ export function armPrayers(settings, Notification) {
   }
 
   const { prayer } = settings.read();
-  if (!prayer?.enabled || !prayer?.location) return;
+  if (!prayer?.enabled) return;
+
+  if (!prayer.location) {
+    locate(settings).then(() => {
+      if (settings.read().prayer?.location) armPrayers(settings, Notification);
+    });
+    return;
+  }
 
   const next = nextPrayer(new Date(), prayer.location, {
     method: prayer.method,

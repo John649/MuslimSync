@@ -254,19 +254,6 @@ export const COMMANDS = {
   status: { local: "status", group: "Info", summary: "Daemon, plugin, and project status" },
   projects: { local: "projects", group: "Info", summary: "List known projects" },
   commands: { local: "commands", group: "Info", summary: "Machine-readable command registry" },
-  prayers: {
-    local: "prayers",
-    group: "Deen",
-    summary: "Today's prayer times, and when the next one is",
-    flags: {
-      location: 'set and remember "latitude,longitude" (first run can infer it from your IP)',
-      method: "calculation method: mwl (default), isna, egypt, makkah, karachi",
-      asr: "asr school: standard (default) or hanafi",
-      date: "show a different day (YYYY-MM-DD)",
-      reminders: "--reminders / --no-reminders toggles the app's prayer notifications",
-    },
-    examples: ["msync prayers", 'msync prayers --location "21.42,39.83" --method makkah'],
-  },
   verse: { local: "verse", group: "Deen", summary: "Today's verse" },
   doctor: {
     local: "doctor",

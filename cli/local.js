@@ -164,17 +164,6 @@ export async function local(name, { flags, positionals = [], port, daemon, Fatal
       };
     }
 
-    case "prayers": {
-      const { prayers } = await import("./prayers.js");
-      const settings = await import("../app/settings.js");
-
-      try {
-        return await prayers({ flags, settings, log: (line) => process.stderr.write(`${line}\n`) });
-      } catch (cause) {
-        throw new Fatal(EXIT.usage, cause.message);
-      }
-    }
-
     case "verse": {
       const { verseOfTheDay } = await import("../quran/daily.js");
       const verse = verseOfTheDay();
