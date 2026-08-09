@@ -14,6 +14,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import * as projects from "./projects.js";
+import { register } from "./registry.js";
 import { universeName, suggestName, suggestFolder } from "./universe.js";
 import { renderSection } from "../cli/agents.js";
 import { vendoredArgon } from "./argon.js";
@@ -78,8 +79,19 @@ function send(response, status, value) {
  *
  * `context` supplies the projects root and the argon process manager, so the
  * routes hold no state of their own and are straightforward to test.
+ *
+ * `registry` is where to record projects that live somewhere the root's scan
+ * cannot see. Null — the headless daemon, with no state directory — means such a
+ * project works for as long as it is serving and is forgotten after that.
  */
-export function createRoutes({ projectsRoot, argon, artifacts, log = () => {}, changed = () => {} }) {
+export function createRoutes({
+  projectsRoot,
+  argon,
+  artifacts,
+  registry = null,
+  log = () => {},
+  changed = () => {},
+}) {
   // Artifact routes exist only when a store is supplied; the headless daemon
   // has no need for binary transport.
   const artifactRoutes = artifacts
@@ -101,6 +113,11 @@ export function createRoutes({ projectsRoot, argon, artifacts, log = () => {}, c
 
   /** Starts a project and returns the session the plugin should connect to. */
   async function serveProject(projectPath) {
+    // Serving is the moment a path outside the scan becomes known to be real, so
+    // it is the moment worth recording: a project the user only ever serves —
+    // never creates here — still survives the next restart.
+    register(registry, projectsRoot(), projectPath);
+
     const session = await argon.start(projectPath);
 
     // Whether a project is serving is part of what the list shows, so the app
@@ -115,7 +132,7 @@ export function createRoutes({ projectsRoot, argon, artifacts, log = () => {}, c
   return {
     ...artifactRoutes,
 
-    "GET /projects": async () => projects.list(projectsRoot(), { running: argon.running }),
+    "GET /projects": async () => projects.list(projectsRoot(), { running: argon.running, registry }),
 
     // What to put in the create dialog's fields. The plugin supplies what only
     // Studio knows (the place's own title); the universe name is looked up
@@ -157,8 +174,13 @@ export function createRoutes({ projectsRoot, argon, artifacts, log = () => {}, c
       const identity = { gameId: body.gameId, placeId: body.placeId, argonId: body.argonId };
 
       // Creating twice for one universe returns the existing project rather
-      // than scaffolding a second copy of the same game.
-      const existing = projects.findByIdentity(projects.list(projectsRoot(), { running: argon.running }), identity);
+      // than scaffolding a second copy of the same game. This is the reason the
+      // registry has to be consulted here too: a project the scan cannot see is
+      // one this would otherwise duplicate on every restart.
+      const existing = projects.findByIdentity(
+        projects.list(projectsRoot(), { running: argon.running, registry }),
+        identity,
+      );
 
       if (existing) {
         return { ...(await serveProject(existing.path)), path: existing.path };
@@ -179,6 +201,11 @@ export function createRoutes({ projectsRoot, argon, artifacts, log = () => {}, c
       }
 
       projects.claim(planned.path, identity);
+
+      // Recorded before serving, for the same reason the change is announced
+      // before serving: the project exists on disk from here on, and a serve
+      // that fails must not be what decides whether it can be found again.
+      register(registry, projectsRoot(), planned.path);
 
       // Announced before serving as well: the project exists on disk from here
       // on, and a serve that fails should not make it invisible.

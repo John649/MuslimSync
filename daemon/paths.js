@@ -11,6 +11,20 @@ import { homedir } from "node:os";
 import { realpathSync } from "node:fs";
 
 /**
+ * A form of a path that can be compared for equality or used as a map key.
+ *
+ * Windows paths are case-insensitive: C:\Users and c:\users are the same
+ * directory. Comparing them case-sensitively would refuse a perfectly valid
+ * path purely because the user typed a different case than realpath returned.
+ * Elsewhere case is part of the name, and folding it would merge two real
+ * directories into one.
+ */
+export function pathKey(candidate) {
+  const resolved = path.resolve(candidate);
+  return process.platform === "win32" ? resolved.toLowerCase() : resolved;
+}
+
+/**
  * Whether `target` is `root` itself or lives beneath it.
  *
  * Compares resolved paths and requires a separator boundary, so `/a/projects`
@@ -20,12 +34,7 @@ export function isWithin(root, target) {
   const from = path.resolve(root);
   const to = path.resolve(target);
 
-  // Windows paths are case-insensitive: C:\Users and c:\users are the same
-  // directory. Comparing them case-sensitively would refuse a perfectly valid
-  // path purely because the user typed a different case than realpath returned.
-  const same = process.platform === "win32" ? from.toLowerCase() === to.toLowerCase() : from === to;
-
-  if (same) return true;
+  if (pathKey(from) === pathKey(to)) return true;
 
   const relative = path.relative(from, to);
 

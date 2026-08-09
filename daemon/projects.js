@@ -11,7 +11,8 @@
 import { readdirSync, existsSync, readFileSync, writeFileSync, mkdirSync, statSync } from "node:fs";
 import path from "node:path";
 
-import { resolveWithin, slugify, uniqueName } from "./paths.js";
+import { pathKey, resolveWithin, slugify, uniqueName } from "./paths.js";
+import { read as readRegistry, forget } from "./registry.js";
 
 /** A directory is a project if it has any *.project.json at its top level. */
 export function projectFileIn(directory) {
@@ -74,57 +75,87 @@ export function mkdir(root, parent, name) {
 }
 
 /**
- * Every project under the root, whether or not it is being served.
+ * Every project the app knows about: the root's direct children, plus any that
+ * registry.js has recorded elsewhere.
  *
  * Discovery is by scanning rather than by a registry file, so a project the
- * user created by hand or cloned from git appears without being registered.
+ * user created by hand or cloned from git appears without being registered. The
+ * scan only reaches one level, though, and a project can be created in a
+ * subfolder — `registry` is the file of paths it cannot see. Omitted, this is
+ * scan-only: the headless daemon has no state directory to keep one in.
  */
-export function list(root, { running = new Map() } = {}) {
-  let realRoot;
-  let directories;
-
-  try {
-    // The configured root may not exist yet — the user can name a folder
-    // before creating it. That is an empty list, not an error.
-    realRoot = resolveWithin(root, "");
-    directories = readdirSync(realRoot, { withFileTypes: true });
-  } catch {
-    return [];
-  }
-
+export function list(root, { running = new Map(), registry = null } = {}) {
   const projects = [];
+  const seen = new Set();
 
-  for (const entry of directories) {
-    if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
-
-    const directory = path.join(realRoot, entry.name);
-    const file = projectFileIn(directory);
-    if (!file) continue;
-
-    const project = readProjectFile(file) ?? {};
-    const session = running.get(directory);
-
-    projects.push({
-      name: project.name || entry.name,
-      path: directory,
-      gameId: project.gameId ?? null,
-      placeIds: Array.isArray(project.placeIds) ? project.placeIds : [],
-      argonId: project.argonId ?? null,
-      // Which services actually reach disk. Anything absent lives only in the
-      // place: invisible to git, to grep, and to an agent's file tools.
-      services: Object.keys(project.tree ?? {}).filter((key) => !key.startsWith("$")),
-      running: Boolean(session),
-      host: session?.host ?? null,
-      port: session?.port ?? null,
-      lastServed: session?.startedAt ?? null,
-      gameConfig: project.gameConfig ?? null,
-      placeConfig: project.placeConfig ?? null,
-    });
+  for (const directory of scan(root)) {
+    seen.add(pathKey(directory));
+    projects.push(describe(directory, running));
   }
+
+  // A registered path that is no longer a project is dropped from the record
+  // rather than reported: a project the user deleted must not sit in the list,
+  // and must not accumulate in the file either.
+  const stale = [];
+
+  for (const directory of readRegistry(registry)) {
+    // Already found by the scan. Registering a direct child is refused, but the
+    // root can be changed after the fact, and a project must not appear twice.
+    if (seen.has(pathKey(directory))) continue;
+    seen.add(pathKey(directory));
+
+    if (!projectFileIn(directory)) {
+      stale.push(directory);
+      continue;
+    }
+
+    projects.push(describe(directory, running));
+  }
+
+  forget(registry, stale);
 
   // Most recently served first, then alphabetical. The picker shows this order
   // and the project you last worked on is the one you usually want.
   return projects.sort((a, b) => (b.lastServed ?? 0) - (a.lastServed ?? 0) || a.name.localeCompare(b.name));
+}
+
+/** The project directories directly under the root, in readdir order. */
+function scan(root) {
+  try {
+    // The configured root may not exist yet — the user can name a folder
+    // before creating it. That is an empty list, not an error.
+    const realRoot = resolveWithin(root, "");
+
+    return readdirSync(realRoot, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory() && !entry.name.startsWith("."))
+      .map((entry) => path.join(realRoot, entry.name))
+      .filter((directory) => projectFileIn(directory));
+  } catch {
+    return [];
+  }
+}
+
+/** One entry in the list. Scanned and registered projects get the same shape. */
+function describe(directory, running) {
+  const project = readProjectFile(projectFileIn(directory)) ?? {};
+  const session = running.get(directory);
+
+  return {
+    name: project.name || path.basename(directory),
+    path: directory,
+    gameId: project.gameId ?? null,
+    placeIds: Array.isArray(project.placeIds) ? project.placeIds : [],
+    argonId: project.argonId ?? null,
+    // Which services actually reach disk. Anything absent lives only in the
+    // place: invisible to git, to grep, and to an agent's file tools.
+    services: Object.keys(project.tree ?? {}).filter((key) => !key.startsWith("$")),
+    running: Boolean(session),
+    host: session?.host ?? null,
+    port: session?.port ?? null,
+    lastServed: session?.startedAt ?? null,
+    gameConfig: project.gameConfig ?? null,
+    placeConfig: project.placeConfig ?? null,
+  };
 }
 
 /** Finds an existing project for a universe, so creating twice is idempotent. */

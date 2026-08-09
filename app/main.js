@@ -17,6 +17,10 @@ import * as settings from "./settings.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
+// Projects that live somewhere the root's one-level scan cannot see. Beside
+// settings.json: the same kind of thing, and the same directory the user owns.
+const REGISTRY = path.join(settings.DIR, "projects.json");
+
 let window = null;
 let reminderTimer = null;
 let daemon = null;
@@ -188,6 +192,7 @@ async function startDaemon() {
         projectsRoot: () => settings.read().projectsRoot,
         argon,
         artifacts,
+        registry: REGISTRY,
         log: (entry) => {
           console.log(`[plugin ${entry.level}] ${entry.source}: ${entry.message}`);
           record(entry.level, `${entry.source}: ${entry.message}`);
@@ -244,7 +249,10 @@ ipcMain.handle("activity:list", () => [...activity].reverse());
 
 ipcMain.handle("projects:list", () => {
   const { projectsRoot } = settings.read();
-  return { root: projectsRoot, projects: projects.list(projectsRoot, { running: argon?.running ?? new Map() }) };
+  return {
+    root: projectsRoot,
+    projects: projects.list(projectsRoot, { running: argon?.running ?? new Map(), registry: REGISTRY }),
+  };
 });
 
 // Both folder buttons end at the same place — a projects root that gets
