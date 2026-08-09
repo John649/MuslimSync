@@ -37,7 +37,7 @@ export function socketPath(directory) {
 }
 
 /** True when this path is a Windows named pipe rather than a real file. */
-const isPipe = (file) => file.startsWith("\\\\.\\pipe\\");
+export const isPipe = (file) => file.startsWith("\\\\.\\pipe\\");
 
 /**
  * Removes a socket file left behind by a process that is gone.

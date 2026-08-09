@@ -14,6 +14,7 @@ import { rmSync } from "node:fs";
 
 import { listenOnIpv6, listenOnUnix } from "./listeners.js";
 import { handleOp } from "./op.js";
+import { isPipe } from "./socket.js";
 
 import { decodeFrame, DEFAULT_PORT, ERROR, MAX_FRAME_BYTES, PROTOCOL } from "./protocol.js";
 import { Session } from "./session.js";
@@ -183,7 +184,9 @@ export class Daemon extends EventEmitter {
     await new Promise((resolve) => (this.#wss ? this.#wss.close(resolve) : resolve()));
     await new Promise((resolve) => (this.#socket ? this.#socket.close(resolve) : resolve()));
     // The file outlives the listener, and a leftover one blocks the next bind.
-    if (this.socketFile) rmSync(this.socketFile, { force: true });
+    // A named pipe is not a file: it goes with the closed server and unlinking
+    // it fails outright.
+    if (this.socketFile && !isPipe(this.socketFile)) rmSync(this.socketFile, { force: true });
     this.#socket = null;
 
     await new Promise((resolve) => (this.#ipv6 ? this.#ipv6.close(resolve) : resolve()));
