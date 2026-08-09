@@ -18,6 +18,7 @@
     "dev:plugin": "node scripts/build-plugin.mjs --watch --install",
     "make:icons": "node scripts/make-icons.mjs",
     "make:app": "node scripts/make-app.mjs",
+    "make:shortcut": "node scripts/make-shortcut.mjs",
     "start:dev": "electron .",
     "gen:agents": "node scripts/make-agents.mjs",
     "set:icons": "node scripts/set-icons.mjs",

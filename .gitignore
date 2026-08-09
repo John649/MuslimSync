@@ -8,5 +8,8 @@ dist/
 *.rbxl
 *.rbxlx
 
+# Built on demand from assets/Logo.png, like the mac bundle in dist/.
+assets/*.ico
+
 # Vendored argon binaries are large; keep the one we ship for this platform.
 !vendor/argon/**

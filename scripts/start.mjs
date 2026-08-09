@@ -6,8 +6,9 @@
 // what macOS reads.
 //
 // So on macOS this launches the real bundle, building it first if it is missing
-// or older than the app source. Everywhere else there is no bundle to build and
-// `electron .` is already correct.
+// or older than the app source. Windows has the same problem for the taskbar and
+// the Start menu, so it gets the same treatment through make-shortcut.mjs.
+// Elsewhere there is nothing to build and `electron .` is already correct.
 //
 // `npm run start:dev` is the raw form, for when stdout in the terminal matters
 // more than the name in the Dock.
@@ -31,7 +32,21 @@ function electronDirectly() {
   );
 }
 
-if (process.platform !== "darwin") {
+if (process.platform === "win32") {
+  // Windows has no bundle to build, but it does need an identity: without a
+  // Start-menu shortcut carrying the icon and the AppUserModelID, the taskbar
+  // shows electron.exe. make-shortcut is a no-op once both exist, so it runs on
+  // every start the way the mac path maintains its bundle.
+  try {
+    execFileSync(process.execPath, [path.join(ROOT, "scripts", "make-shortcut.mjs"), "--quiet"], {
+      stdio: "inherit",
+    });
+  } catch {
+    // A Start menu we cannot write to is not a reason to refuse to launch.
+  }
+
+  electronDirectly();
+} else if (process.platform !== "darwin") {
   electronDirectly();
 } else {
   // The launcher inside the bundle bakes in this checkout's path, so a bundle

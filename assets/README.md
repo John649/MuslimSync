@@ -3,6 +3,10 @@
 `npm run make:icons` regenerates these from `scripts/make-icons.mjs` — a rounded
 square with a crescent, tinted per connection state.
 
+`muslimsync.ico` is not one of them. `npm run make:shortcut` derives it from
+`Logo.png` for the Windows taskbar and Start menu, so it is generated on demand
+rather than committed.
+
 ## Why they are not already in the plugin
 
 A Roblox toolbar icon must be an uploaded asset; a plugin cannot reference a

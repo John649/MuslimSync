@@ -17,6 +17,9 @@ import * as settings from "./settings.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
+// Windows taskbars pin and group by this id; make-shortcut.mjs writes the same one.
+if (process.platform === "win32") app.setAppUserModelId("com.muslimsync.app");
+
 // Projects that live somewhere the root's one-level scan cannot see. Beside
 // settings.json: the same kind of thing, and the same directory the user owns.
 const REGISTRY = path.join(settings.DIR, "projects.json");
@@ -48,6 +51,7 @@ function createWindow() {
     minWidth: 780,
     minHeight: 520,
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
+    icon: path.join(HERE, "..", "assets", "muslimsync.ico"), // Windows and Linux; macOS uses the bundle.
     backgroundColor: "#0f1115",
     webPreferences: {
       preload: path.join(HERE, "preload.cjs"),
