@@ -12,12 +12,14 @@ import * as projects from "../daemon/projects.js";
 import { Artifacts } from "../daemon/artifacts.js";
 import { registerTools } from "./tools.js";
 import { shouldFire, msUntilNextCheck } from "./reminder.js";
+import { nextPrayer } from "../quran/prayer.js";
 import * as settings from "./settings.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
 let window = null;
 let reminderTimer = null;
+let prayerTimer = null;
 let daemon = null;
 let argon = null;
 let artifacts = null;
@@ -110,6 +112,42 @@ function armReminder() {
   const delay = msUntilNextCheck(new Date(), after.reminder, after.lastReminderDay);
 
   reminderTimer = setTimeout(armReminder, delay);
+}
+
+// ------------------------------------------------------- prayer reminders
+
+// One timer armed at the next prayer. Unlike the daily verse there is no
+// missed-day catch-up: a prayer notification three hours late is noise, so a
+// sleep past one simply arms the next.
+function armPrayers() {
+  if (prayerTimer) {
+    clearTimeout(prayerTimer);
+    prayerTimer = null;
+  }
+
+  const { prayer } = settings.read();
+  if (!prayer?.enabled || !prayer?.location) return;
+
+  const next = nextPrayer(new Date(), prayer.location, {
+    method: prayer.method,
+    asr: prayer.asr,
+    includeSunrise: false,
+  });
+
+  // Polar edge: nothing computable today or tomorrow. Try again in a day.
+  if (!next) {
+    prayerTimer = setTimeout(armPrayers, 24 * 3600000);
+    return;
+  }
+
+  prayerTimer = setTimeout(() => {
+    const name = next.name[0].toUpperCase() + next.name.slice(1);
+    const clock = next.time.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+
+    new Notification({ title: `${name} — ${clock}`, body: "It is time to pray.", silent: false }).show();
+
+    armPrayers();
+  }, Math.max(1000, next.time.getTime() - Date.now()));
 }
 
 // ------------------------------------------------------------- the daemon
@@ -331,6 +369,7 @@ ipcMain.handle("settings:set", (_event, patch) => {
   // A changed time or enabled flag must take effect now, not at the next
   // scheduled wake — otherwise turning the reminder on does nothing all day.
   armReminder();
+  armPrayers();
   return next;
 });
 
@@ -352,6 +391,7 @@ registerTools({
 app.whenReady().then(async () => {
   createWindow();
   armReminder();
+  armPrayers();
   watchProjectsRoot();
   await startDaemon();
 
@@ -360,7 +400,11 @@ app.whenReady().then(async () => {
 
   // A laptop that slept through the trigger wakes here. The timer that was
   // pending during sleep is unreliable, so re-evaluate against the real clock.
-  powerMonitor.on("resume", armReminder);
+  powerMonitor.on("resume", () => {
+    armReminder();
+    // The pending prayer timer slept too; a stale one would fire hours late.
+    armPrayers();
+  });
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

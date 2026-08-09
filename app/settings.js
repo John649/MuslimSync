@@ -17,6 +17,9 @@ export const DEFAULTS = {
   projectsRoot: path.join(homedir(), "projects"),
   controlPort: 7900,
   reminder: { enabled: true, ...DEFAULT_TIME },
+  // location is null until someone sets it: a wrong guessed city notifying at
+  // wrong times is worse than no notifications. `msync prayers` sets it.
+  prayer: { enabled: true, location: null, method: "mwl", asr: "standard" },
   translation: "khattab",
   showArabic: true,
   lastReminderDay: null,
