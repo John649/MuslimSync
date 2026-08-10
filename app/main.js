@@ -37,10 +37,19 @@ let daemonError = null;
 const MAX_ACTIVITY = 200;
 const activity = [];
 
+// A destroyed window is not null, and "closed" fires a beat after the destroy,
+// so `window?.` alone can still reach a dead object. This is the one door to
+// the window for anything that runs later than it was armed.
+const liveWindow = () => (window && !window.isDestroyed() ? window : null);
+
+function send(channel, ...args) {
+  liveWindow()?.webContents.send(channel, ...args);
+}
+
 function record(kind, message) {
   activity.push({ at: Date.now(), kind, message });
   if (activity.length > MAX_ACTIVITY) activity.shift();
-  window?.webContents.send("activity:changed");
+  send("activity:changed");
 }
 
 function createWindow() {
@@ -106,7 +115,7 @@ function watchProjectsRoot() {
       // Creating a project writes several files; one notification per change
       // would re-scan the disk a dozen times for a single create.
       clearTimeout(watchTimer);
-      watchTimer = setTimeout(() => window?.webContents.send("projects:changed"), 150);
+      watchTimer = setTimeout(() => send("projects:changed"), 150);
     });
   } catch {
     // A root that does not exist yet is not an error — the user has simply not
@@ -125,10 +134,10 @@ function servingPaths() {
 }
 
 function publishStatus() {
-  window?.webContents.send("daemon:status", daemonStatus());
+  send("daemon:status", daemonStatus());
   // Serving state is part of what the projects list shows, so the two are
   // refreshed together rather than leaving the list stale until a click.
-  window?.webContents.send("projects:changed");
+  send("projects:changed");
 }
 
 async function startDaemon() {
@@ -157,7 +166,7 @@ async function startDaemon() {
           console.log(`[plugin ${entry.level}] ${entry.source}: ${entry.message}`);
           record(entry.level, `${entry.source}: ${entry.message}`);
         },
-        changed: () => window?.webContents.send("projects:changed"),
+        changed: () => send("projects:changed"),
       }),
     });
     daemon.on("change", publishStatus);
@@ -301,7 +310,7 @@ ipcMain.handle("settings:set", (_event, patch) => {
   const next = settings.update(patch ?? {});
   // A changed time or enabled flag must take effect now, not at the next
   // scheduled wake — otherwise turning the reminder on does nothing all day.
-  armReminder(settings, Notification, () => window);
+  armReminder(settings, Notification, liveWindow);
   armPrayers(settings, Notification);
   return next;
 });
@@ -323,7 +332,7 @@ registerTools({
 
 app.whenReady().then(async () => {
   createWindow();
-  armReminder(settings, Notification, () => window);
+  armReminder(settings, Notification, liveWindow);
   armPrayers(settings, Notification);
   watchProjectsRoot();
   await startDaemon();
@@ -334,7 +343,7 @@ app.whenReady().then(async () => {
   // A laptop that slept through the trigger wakes here. The timer that was
   // pending during sleep is unreliable, so re-evaluate against the real clock.
   powerMonitor.on("resume", () => {
-    armReminder(settings, Notification, () => window);
+    armReminder(settings, Notification, liveWindow);
     // The pending prayer timer slept too; a stale one would fire hours late.
     armPrayers(settings, Notification);
   });
