@@ -9,7 +9,6 @@ const api = window.muslimsync;
 
 const card = {
   root: document.getElementById("prayers"),
-  city: document.getElementById("prayers-city"),
   list: document.getElementById("prayers-list"),
   next: document.getElementById("prayers-next"),
 };
@@ -44,14 +43,11 @@ async function render() {
 
   if (!today.ready) {
     // No location yet — the main process is finding one; check back shortly.
-    card.city.textContent = "locating…";
     card.list.replaceChildren();
-    card.next.textContent = "";
+    card.next.textContent = "locating…";
     timer = setTimeout(render, 15000);
     return;
   }
-
-  card.city.textContent = today.settings.city ?? "";
 
   card.list.replaceChildren(
     ...Object.entries(today.times).map(([name, iso]) => {
@@ -94,7 +90,6 @@ async function loadSettings() {
 
   if (prayer?.location) {
     controls.location.value = `${prayer.location.latitude}, ${prayer.location.longitude}`;
-    if (prayer.city) controls.locationHelp.textContent = `Currently: ${prayer.city}`;
   }
 }
 
