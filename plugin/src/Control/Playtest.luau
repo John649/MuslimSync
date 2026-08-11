@@ -29,6 +29,15 @@ local contexts: { [string]: { name: string, connection: any, kind: string, at: n
 local pending: { [string]: { resolved: boolean, value: any } } = {}
 local nextRequest = 0
 
+--- How many runtime contexts are currently attached (edit side).
+function Playtest.contextCount(): number
+	local count = 0
+	for _ in contexts do
+		count += 1
+	end
+	return count
+end
+
 --- Which connection types this DataModel may hold.
 local function targets(): (boolean, boolean)
 	local edit, test = false, false

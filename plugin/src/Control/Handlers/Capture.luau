@@ -18,6 +18,7 @@ local MuslimSync = script:FindFirstAncestor("MuslimSync")
 local Artifacts = require(MuslimSync.Control.Artifacts)
 local Path = require(MuslimSync.Control.Path)
 local Photo = require(MuslimSync.Control.Photo)
+local Playtest = require(MuslimSync.Control.Playtest)
 
 local CAPTURE_TIMEOUT = 20
 -- A 3/4 view reads as depth rather than as an elevation drawing, and leaving
@@ -42,6 +43,17 @@ end
 --- bounded: without a deadline a denied permission prompt would hang the op
 --- forever with no way for the caller to tell.
 local function screenshot(): string
+	-- During a playtest the edit viewport is not the one on screen, and
+	-- CaptureScreenshot's callback silently never fires. Twenty seconds of
+	-- waiting for it taught two agents to hunt for a modal that was not there.
+	if Playtest.contextCount() > 0 then
+		fail(
+			"UNSUPPORTED",
+			"a playtest is running, and capture works from the edit viewport only — "
+				.. "stop it first (msync stop), or screenshot the playtest window with OS tools"
+		)
+	end
+
 	local content: string? = nil
 	local requested, requestError = pcall(function()
 		CaptureService:CaptureScreenshot(function(result)
@@ -59,8 +71,8 @@ local function screenshot(): string
 		if os.clock() > deadline then
 			fail(
 				"TIMEOUT",
-				"the screenshot was never delivered — a modal Studio dialog blocks the callback, "
-					.. "so check for a permission prompt or any other open dialog"
+				"the screenshot was never delivered — most likely a permission prompt is waiting "
+					.. "in Studio (or another modal dialog); capture needs it answered once"
 			)
 		end
 		RunService.Heartbeat:Wait()
