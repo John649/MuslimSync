@@ -151,6 +151,14 @@ async function writePhoto(port, result, flags) {
     throw new Fatal(EXIT.pluginError, `capture truncated: expected ${result.byteLength} bytes, got ${rgba.length}`);
   }
 
+  // StudioCaptureService captures arrive as finished PNG bytes — nothing to
+  // decode, crop, or encode. Write and done.
+  if (result.format === "png") {
+    const file = path.resolve(String(flags.out ?? "capture.png"));
+    writeFileSync(file, rgba);
+    return { file, width: result.width, height: result.height };
+  }
+
   let pixels = rgba;
   let { width, height } = result;
 

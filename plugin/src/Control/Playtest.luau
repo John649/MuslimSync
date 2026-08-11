@@ -17,6 +17,7 @@ local RunService = game:GetService("RunService")
 local MuslimSync = script:FindFirstAncestor("MuslimSync")
 
 local Exec = require(MuslimSync.Control.PlaytestExec)
+local Screenshot = require(MuslimSync.Control.Screenshot)
 local Log = require(MuslimSync.Log)
 
 local REQUEST_TIMEOUT = 15
@@ -121,6 +122,19 @@ local function startRuntimeAgent()
 		elseif frame.op == "ping" then
 			reply.ok = true
 			reply.value = name
+		elseif frame.op == "capture_prepare" or frame.op == "capture_read" or frame.op == "capture_close" then
+			-- The clone owns the screen during a playtest, so screenshots have
+			-- to be taken here and pulled out in chunks.
+			local run = if frame.op == "capture_prepare"
+				then Screenshot.prepare
+				elseif frame.op == "capture_read" then Screenshot.read
+				else Screenshot.close
+			local ok, result = pcall(run, frame)
+			reply.ok = ok
+			reply.value = if ok then result else nil
+			reply.error = if ok
+				then nil
+				else (if type(result) == "table" then tostring(result.message) else tostring(result))
 		else
 			reply.ok = false
 			reply.error = `unknown runtime op: {tostring(frame.op)}`

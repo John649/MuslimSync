@@ -147,6 +147,8 @@ export const COMMANDS = {
       margin: "how much air to leave around the subject (default 1.25)",
       region: "x,y,width,height to crop in the viewport",
       delay: "seconds to wait before the frame is taken",
+      context: "capture inside a running playtest: client or server",
+      ui: "\"none\" leaves the GUI out (StudioCaptureService captures only)",
     },
     examples: [
       "msync photo --out shot.png",
