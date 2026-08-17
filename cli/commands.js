@@ -306,10 +306,12 @@ export const COMMANDS = {
 /**
  * Commands that change the place they run in.
  *
- * With more than one place connected these refuse to guess: the default target
- * is whichever connected most recently, and "most recently connected" is not
- * something anyone reasons about before typing `rm`. Reads stay permissive —
- * reading the wrong place is obvious and costs nothing.
+ * Every command takes the working directory's place when nobody named one. When
+ * even that cannot answer, these refuse rather than fall back to the daemon's
+ * default: that default is whichever place connected most recently, and "most
+ * recently connected" is not something anyone reasons about before typing `rm`.
+ * A read does fall back, since it has nothing to undo — but it says which place
+ * it picked, because an answer from the wrong place looks like a right one.
  */
 export const MUTATING = new Set([
   "set", "new", "rm", "mv", "attr", "tag", "select",

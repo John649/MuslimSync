@@ -178,11 +178,12 @@ msync paste ServerScriptService --place 2
 Several paths at once also work, and `msync copy` with no path takes whatever
 is selected in Studio. With only one place open, `--place` can be left off.
 
-**Anything that changes a place refuses to run without `--place` when more
-than one is connected.** It is not advice; the command exits 2 and lists the
-identifiers. The default target is whichever place connected most recently, so
-the user opening another place in Studio silently moves it — which is fine for
-a read and not fine for a write.
+Without `--place`, a command runs in the place this directory's project is
+served to, so a shell inside a project only needs the flag to reach elsewhere.
+**When the directory cannot say which place it means, anything that changes a
+place refuses to run.** It is not advice; the command exits 2 and lists the
+identifiers. A read falls back to the daemon's default instead, which is
+whichever place connected most recently.
 
 Select by identifier, never by name: every unpublished place is called
 "Place1". `msync status` prints the `--place` value for each.
