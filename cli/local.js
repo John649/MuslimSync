@@ -6,7 +6,7 @@
 // `daemon`, `Fatal` and `EXIT` are passed in rather than imported to keep the
 // dependency pointing one way — msync.js owns the transport and the exit codes.
 
-import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
 import { registry } from "./commands.js";
@@ -15,7 +15,8 @@ import { help, dim, green, cyan, red } from "./format.js";
 import { diagnose, formatReport } from "./doctor.js";
 import { explainUnreachable } from "./reach.js";
 import { send } from "./transport.js";
-import { renderAgentsMd, mergeInto, groupNames } from "./agents.js";
+import { renderAgentsMd, groupNames } from "./agents.js";
+import { installBrief } from "./install.js";
 import { runTest, formatVerdict, TestFailure } from "./playtest.js";
 import { UsageError } from "./args.js";
 
@@ -96,24 +97,14 @@ export async function local(name, { flags, positionals = [], port, daemon, Fatal
         throw new Fatal(EXIT.usage, `no such directory: ${into}`);
       }
 
-      const target = path.join(into, "AGENTS.md");
+      const files = installBrief(into, options);
+      const written = files.filter((file) => file.changed);
 
-      let before = "";
-      try {
-        before = readFileSync(target, "utf8");
-      } catch {
-        // A project with no AGENTS.md yet is the common case, not an error.
-      }
-
-      const after = mergeInto(before, options);
-
-      if (after === before) return { text: `${target} is already up to date`, json: { path: target, changed: false } };
-
-      writeFileSync(target, after);
+      if (!written.length) return { text: `${into} is already up to date`, json: { files, changed: false } };
 
       return {
-        text: `${before ? "updated" : "wrote"} ${target}`,
-        json: { path: target, changed: true, created: !before },
+        text: written.map((file) => `${file.created ? "wrote" : "updated"} ${file.path}`).join("\n"),
+        json: { files, changed: true },
       };
     }
 

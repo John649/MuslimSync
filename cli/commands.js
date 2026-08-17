@@ -290,7 +290,7 @@ export const COMMANDS = {
     group: "Info",
     summary: "Print the agent brief, or install it into a project's AGENTS.md",
     flags: {
-      install: "add or refresh the MuslimSync section in <dir>/AGENTS.md (default .)",
+      install: "add or refresh the MuslimSync section in <dir>/AGENTS.md, imported from CLAUDE.md (default .)",
       only: "comma-separated groups to spell out; the rest are indexed",
       all: "spell out every group",
     },

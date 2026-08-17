@@ -327,9 +327,10 @@ export function groupNames() {
 
 // Sentinels so an install can be repeated, and updated, without eating whatever
 // else the file says. Everything between them is ours; everything outside is
-// the project's and is never touched.
-const BEGIN = "<!-- begin muslimsync -->";
-const END = "<!-- end muslimsync -->";
+// the project's and is never touched. Exported because install.js marks its
+// block in a project's CLAUDE.md the same way.
+export const BEGIN = "<!-- begin muslimsync -->";
+export const END = "<!-- end muslimsync -->";
 
 /**
  * The brief as a section to drop into a project's own AGENTS.md.

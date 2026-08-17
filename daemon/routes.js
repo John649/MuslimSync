@@ -10,13 +10,12 @@
 
 import { encode, decode } from "@msgpack/msgpack";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import path from "node:path";
+import { mkdirSync, readFileSync } from "node:fs";
 
 import * as projects from "./projects.js";
 import { register } from "./registry.js";
 import { universeName, suggestName, suggestFolder } from "./universe.js";
-import { renderSection } from "../cli/agents.js";
+import { installBrief } from "../cli/install.js";
 import { vendoredArgon } from "./argon.js";
 
 // Must exceed a base64-encoded artifact chunk, which inflates by 4/3, plus the
@@ -233,8 +232,11 @@ function scaffold(projectPath) {
   // An agent working in a game repository has no reason to know this tool
   // exists — `gh` is recognised because it is in the training data, and
   // nothing here is.
+  //
+  // Through the same install the CLI runs, so a project created here is not a
+  // second, subtly different arrangement of the same files.
   try {
-    writeFileSync(path.join(projectPath, "AGENTS.md"), renderSection());
+    installBrief(projectPath);
   } catch {
     // A project without the brief is a project that still works. Failing the
     // create over a documentation file would be the wrong trade.

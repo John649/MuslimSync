@@ -192,7 +192,12 @@ msync agents --install            # add or refresh the section in ./AGENTS.md
 msync agents --install ~/MyGame   # or somewhere else
 ```
 
-Projects MuslimSync creates get it automatically. Installing is idempotent and
+Installing also leaves a `CLAUDE.md` beside it holding one `@AGENTS.md` import
+line, because Claude Code reads that file and never AGENTS.md — an import
+bridges the two without a second copy of the brief to go stale. A CLAUDE.md that
+already imports AGENTS.md is left exactly as it is.
+
+Projects MuslimSync creates get both automatically. Installing is idempotent and
 only ever touches the block between its own markers, so the rest of a project's
 AGENTS.md is left alone.
 

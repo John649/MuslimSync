@@ -362,6 +362,10 @@ test("a new project is scaffolded with the agent brief", async () => {
 
   assert.ok(existsSync(brief), "expected AGENTS.md in the new project");
   assert.match(readFileSync(brief, "utf8"), /## MuslimSync/);
+
+  // Claude Code reads CLAUDE.md and never AGENTS.md, so a project created here
+  // needs the same bridge `msync agents --install` writes.
+  assert.match(readFileSync(path.join(created.value.path, "CLAUDE.md"), "utf8"), /^@AGENTS\.md$/m);
 });
 
 test("a new project maps the services that hold code", async () => {

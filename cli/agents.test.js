@@ -175,3 +175,83 @@ test("that workflow is dropped when transfer is out of scope", () => {
   const narrow = renderAgentsMd({ groups: ["Navigate"] });
   assert.ok(!narrow.includes("Taking something from another game"));
 });
+
+// ------------------------------------------------------- bridging to CLAUDE.md
+
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+
+import { installBrief } from "./install.js";
+
+/** An empty project directory, since installing reads and writes real files. */
+function project(claudeMd) {
+  const directory = mkdtempSync(path.join(tmpdir(), "msync-agents-"));
+  if (claudeMd !== undefined) writeFileSync(path.join(directory, "CLAUDE.md"), claudeMd);
+  return directory;
+}
+
+test("installing bridges the brief into CLAUDE.md", () => {
+  // Claude Code reads CLAUDE.md and never AGENTS.md, so a project with only the
+  // latter hands the brief to every agent except that one.
+  const directory = project();
+
+  try {
+    installBrief(directory);
+
+    assert.match(readFileSync(path.join(directory, "CLAUDE.md"), "utf8"), /^@AGENTS\.md$/m);
+    assert.match(readFileSync(path.join(directory, "AGENTS.md"), "utf8"), /begin muslimsync/);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("installing twice leaves CLAUDE.md byte-identical", () => {
+  const directory = project();
+
+  try {
+    installBrief(directory);
+    const once = readFileSync(path.join(directory, "CLAUDE.md"), "utf8");
+
+    installBrief(directory);
+
+    assert.equal(readFileSync(path.join(directory, "CLAUDE.md"), "utf8"), once);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("a CLAUDE.md that already imports AGENTS.md is not touched at all", () => {
+  // However the user arranged their own file, it already reaches the brief —
+  // and their arrangement of it is not ours to tidy.
+  const theirs = "# My Game\n\nRead this first, then @AGENTS.md for the tooling.\n";
+  const directory = project(theirs);
+
+  try {
+    installBrief(directory);
+
+    assert.equal(readFileSync(path.join(directory, "CLAUDE.md"), "utf8"), theirs);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("a CLAUDE.md without the import gains it in a marked block", () => {
+  // Marked like the AGENTS.md section, so a later install recognises its own
+  // work and the project can see which line is not theirs.
+  const directory = project("# My Game\n\nBuild with `npm run build`.\n");
+
+  try {
+    installBrief(directory);
+    const after = readFileSync(path.join(directory, "CLAUDE.md"), "utf8");
+
+    assert.match(after, /Build with `npm run build`/);
+    assert.match(after, /<!-- begin muslimsync -->\n\n@AGENTS\.md\n\n<!-- end muslimsync -->/);
+    assert.ok(after.indexOf("My Game") < after.indexOf("@AGENTS.md"));
+
+    installBrief(directory);
+    assert.equal(readFileSync(path.join(directory, "CLAUDE.md"), "utf8"), after);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
